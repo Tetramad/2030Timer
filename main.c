@@ -139,9 +139,9 @@ void fnd_display(void) {
 }
 
 void fnd_reset(void) {
+	PORTF |= _BV(PORTF0);
     for (int i = 8; i >= 0; --i) {
         for (int j = 0; j < 8; ++j) {
-            PORTF |= _BV(PORTF0);
             PORTF |= _BV(PORTF4);
             PORTF &= ~_BV(PORTF4);
         }
