@@ -16,7 +16,7 @@ int main(void) {
         HMS_S,
     } mode = Counter;
 
-    void (*display)(void) = display_counter;
+    void (*display)(void) = buffer_counter;
     void (*up)(void) = nullptr;
     uint8_t cnt = 0;
 
@@ -74,7 +74,7 @@ int main(void) {
         if (is_N_pressed) {
             switch (mode) {
                 case Counter:
-                    display = display_ymd;
+                    display = buffer_ymd;
                     up = up_year;
                     mode = YMD_Y;
                     stop_counter();
@@ -88,7 +88,7 @@ int main(void) {
                     mode = YMD_D;
                     break;
                 case YMD_D:
-                    display = display_hms;
+                    display = buffer_hms;
                     up = up_hour;
                     mode = HMS_H;
                     break;
@@ -101,7 +101,7 @@ int main(void) {
                     mode = HMS_S;
                     break;
                 case HMS_S:
-                    display = display_counter;
+                    display = buffer_counter;
                     up = nullptr;
                     mode = Counter;
                     resume_counter();
@@ -181,7 +181,7 @@ void time_init(void) {
     SREG = sreg;
 }
 
-void display_counter(void) {
+void buffer_counter(void) {
     int32_t remain_s = difftime(dday_s, rtc_s);
     assert(remain_s >= 0);
 
@@ -212,7 +212,7 @@ static void u8rprinti8(uint8_t buf[], int begin, int end, int8_t val) {
 #define u8rprint(buf, begin, end, val) \
 	_Generic((val), int16_t: u8rprinti16, int8_t: u8rprinti8)(buf, begin, end, val)
 
-void display_ymd(void) {
+void buffer_ymd(void) {
     struct tm const t = *localtime(&rtc_s);
     int16_t const year = t.tm_year + 1900;
     int8_t const mon = t.tm_mon + 1;
@@ -224,7 +224,7 @@ void display_ymd(void) {
 	buf[0] = 10;
 }
 
-void display_hms(void) {
+void buffer_hms(void) {
     struct tm const t = *localtime(&rtc_s);
     int8_t const hour = t.tm_hour;
     int8_t const min = t.tm_min;

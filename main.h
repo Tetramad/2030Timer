@@ -36,9 +36,9 @@ uint8_t const FND_LUT[] = {
 };
 
 void time_init(void);
-void display_counter(void);
-void display_ymd(void);
-void display_hms(void);
+void buffer_counter(void);
+void buffer_ymd(void);
+void buffer_hms(void);
 
 void up_year(void);
 void up_month(void);
