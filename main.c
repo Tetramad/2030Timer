@@ -300,9 +300,9 @@ void up_second(void) {
 void ctl_init(void) {
     uint8_t sreg = { 0 };
     /* GPIO settings */
-    DDRD &= ~(_BV(PORTD0) | _BV(PORTD1));
+    DDRB &= ~(_BV(PORTB6) | _BV(PORTB7));
     DDRE &= ~_BV(PORTE6);
-    PORTD &= ~(_BV(PORTD0) | _BV(PORTD1));
+    PORTB &= ~(_BV(PORTB6) | _BV(PORTB7));
     PORTE &= ~_BV(PORTE6);
 
     /* disable global interrupt */
@@ -339,10 +339,10 @@ void resume_counter(void) {
 #endif
 
 ISR(INT6_vect) {
-    if (bit_is_set(PIND, PIND0)) {
+    if (bit_is_set(PINB, PINB6)) {
         is_N_pressed = true;
     }
-    if (bit_is_set(PIND, PIND1)) {
+    if (bit_is_set(PINB, PINB7)) {
         is_U_pressed = true;
     }
 }
