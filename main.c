@@ -140,7 +140,7 @@ void fnd_display(void) {
 }
 
 void fnd_reset(void) {
-	PORTF |= _BV(PORTF0);
+    PORTF |= _BV(PORTF0);
     for (int i = 8; i >= 0; --i) {
         for (int j = 0; j < 8; ++j) {
             PORTF |= _BV(PORTF4);
@@ -198,10 +198,10 @@ void buffer_ymd(void) {
     int8_t const mon = t.tm_mon + 1;
     int8_t const mday = t.tm_mday;
 
-	u8rprint(buf, 8, 7, mday);
-	u8rprint(buf, 6, 5, mon);
-	u8rprint(buf, 4, 1, year);
-	buf[0] = 10;
+    u8rprint(buf, 8, 7, mday);
+    u8rprint(buf, 6, 5, mon);
+    u8rprint(buf, 4, 1, year);
+    buf[0] = 10;
 }
 
 void buffer_hms(void) {
@@ -210,11 +210,11 @@ void buffer_hms(void) {
     int8_t const min = t.tm_min;
     int8_t const sec = t.tm_sec;
 
-	u8rprint(buf, 8, 7, sec);
-	buf[6] = 10;
-	u8rprint(buf, 5, 4, min);
-	buf[3] = 10;
-	u8rprint(buf, 2, 1, hour);
+    u8rprint(buf, 8, 7, sec);
+    buf[6] = 10;
+    u8rprint(buf, 5, 4, min);
+    buf[3] = 10;
+    u8rprint(buf, 2, 1, hour);
     buf[0] = 10;
 }
 
@@ -305,7 +305,7 @@ ISR(INT6_vect) {
 }
 
 ISR(TIMER1_COMPA_vect) {
-	++rtc_s;
+    ++rtc_s;
 }
 
 #ifdef __clang__
