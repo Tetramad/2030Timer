@@ -1,4 +1,5 @@
 #include "main.h"
+#include "inline_utility.h"
 
 int main(void) {
     fnd_init();
@@ -191,27 +192,6 @@ void buffer_counter(void) {
     }
 }
 
-static void u8rprinti16(uint8_t buf[], int begin, int end, int16_t val) {
-    bool const inc = begin <= end;
-
-    for (int i = begin; (inc ? i <= end : i >= end); (inc ? ++i : --i)) {
-        buf[i] = val % 10;
-        val /= 10;
-    }
-}
-
-static void u8rprinti8(uint8_t buf[], int begin, int end, int8_t val) {
-    bool const inc = begin <= end;
-
-    for (int i = begin; (inc ? i <= end : i >= end); (inc ? ++i : --i)) {
-        buf[i] = val % 10;
-        val /= 10;
-    }
-}
-
-#define u8rprint(buf, begin, end, val) \
-	_Generic((val), int16_t: u8rprinti16, int8_t: u8rprinti8)(buf, begin, end, val)
-
 void buffer_ymd(void) {
     struct tm const t = *localtime(&rtc_s);
     int16_t const year = t.tm_year + 1900;
@@ -237,29 +217,6 @@ void buffer_hms(void) {
 	u8rprint(buf, 2, 1, hour);
     buf[0] = 10;
 }
-
-static void incwai16(int16_t *pval, int16_t max, int16_t reset) {
-    int16_t val = *pval;
-
-    ++val;
-    if (val > max) {
-        val = reset;
-    }
-    *pval = val;
-}
-
- void incwai8(int8_t *pval, int8_t max, int8_t reset) {
-    int8_t val = *pval;
-
-    ++val;
-    if (val > max) {
-        val = reset;
-    }
-    *pval = val;
-}
-
-#define incwa(pval, max, reset) \
-	_Generic((*pval), int16_t: incwai16, int8_t: incwai8)(pval, max, reset)
 
 void up_year(void) {
     struct tm t = *localtime(&rtc_s);
