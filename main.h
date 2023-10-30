@@ -17,6 +17,11 @@ void fnd_init(void);
 void fnd_display(void);
 void fnd_reset(void);
 
+enum {
+    FND_OFF = 10,
+    FND_ON = 11
+};
+
 time_t dday_s = DDAY_EPOCH;
 time_t rtc_s = 0;
 uint8_t buf[9] = { 0, };
@@ -31,8 +36,8 @@ uint8_t const FND_LUT[] = {
     [7]=0b11100000,
     [8]=0b11111110,
     [9]=0b11110110,
-    [10]=0b00000000,
-    [11]=0b11111111,
+    [FND_OFF]=0b00000000,
+    [FND_ON]=0b11111111,
 };
 
 void time_init(void);

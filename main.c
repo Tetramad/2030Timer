@@ -29,30 +29,30 @@ int main(void) {
                 case Counter:
                     break;
                 case YMD_Y:
-                    buf[1] = 10;
-                    buf[2] = 10;
-                    buf[3] = 10;
-                    buf[4] = 10;
+                    buf[1] = FND_OFF;
+                    buf[2] = FND_OFF;
+                    buf[3] = FND_OFF;
+                    buf[4] = FND_OFF;
                     break;
                 case YMD_M:
-                    buf[5] = 10;
-                    buf[6] = 10;
+                    buf[5] = FND_OFF;
+                    buf[6] = FND_OFF;
                     break;
                 case YMD_D:
-                    buf[7] = 10;
-                    buf[8] = 10;
+                    buf[7] = FND_OFF;
+                    buf[8] = FND_OFF;
                     break;
                 case HMS_H:
-                    buf[1] = 10;
-                    buf[2] = 10;
+                    buf[1] = FND_OFF;
+                    buf[2] = FND_OFF;
                     break;
                 case HMS_M:
-                    buf[4] = 10;
-                    buf[5] = 10;
+                    buf[4] = FND_OFF;
+                    buf[5] = FND_OFF;
                     break;
                 case HMS_S:
-                    buf[7] = 10;
-                    buf[8] = 10;
+                    buf[7] = FND_OFF;
+                    buf[8] = FND_OFF;
                     break;
             }
         }
@@ -201,7 +201,7 @@ void buffer_ymd(void) {
     u8rprint(buf, 8, 7, mday);
     u8rprint(buf, 6, 5, mon);
     u8rprint(buf, 4, 1, year);
-    buf[0] = 10;
+    buf[0] = FND_OFF;
 }
 
 void buffer_hms(void) {
@@ -211,11 +211,11 @@ void buffer_hms(void) {
     int8_t const sec = t.tm_sec;
 
     u8rprint(buf, 8, 7, sec);
-    buf[6] = 10;
+    buf[6] = FND_OFF;
     u8rprint(buf, 5, 4, min);
-    buf[3] = 10;
+    buf[3] = FND_OFF;
     u8rprint(buf, 2, 1, hour);
-    buf[0] = 10;
+    buf[0] = FND_OFF;
 }
 
 void up_year(void) {
