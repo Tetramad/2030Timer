@@ -1,11 +1,79 @@
 #include "main.h"
 #include "inline_utility.h"
 
+#define DS1337_SLA 0b1101000
+#define DS1337_SLAX (DS1337_SLA << 1)
+
+struct timekeeper_registers_t {
+    uint8_t seconds;
+    uint8_t minutes;
+    uint8_t hours;
+    uint8_t day;
+    uint8_t date;
+    uint8_t month_century;
+    uint8_t year;
+} timekeeper = { 0, };
+
+uint8_t bcd2u8(uint8_t bcd) {
+    return ((bcd >> 4) * 10) + (bcd & 0b0000'1111);
+}
+
+uint8_t u82bcd(uint8_t u8) {
+    assert(u8 < 100);
+    return ((u8 / 10) << 4) | (u8 % 10);
+}
+
 int main(void) {
+    twi_init();
     fnd_init();
     time_init();
     ctl_init();
     sei();
+
+    {
+        uint8_t sreg = SREG;
+        cli();
+        if (bit_is_set(PINB, PINB6) && bit_is_set(PINB, PINB7)) {
+            twi_start();
+            twi_send_address(DS1337_SLA, TW_WRITE);
+            twi_write_data(0x00);
+            twi_write_data(0b0000'0000);
+            twi_write_data(0b0000'0000);
+            twi_write_data(0b0000'0000);
+            twi_write_data(0b0000'0001);
+            twi_write_data(0b0000'0001);
+            twi_write_data(0b1000'0000);
+            twi_write_data(0b0000'0000);
+            twi_stop();
+            _delay_us(64);
+        }
+
+        twi_start();
+        twi_send_address(DS1337_SLA, TW_WRITE);
+        twi_write_data(0x00);
+        twi_repeated_start();
+        twi_send_address(DS1337_SLA, TW_READ);
+        twi_read_data(&timekeeper.seconds, true);
+        twi_read_data(&timekeeper.minutes, true);
+        twi_read_data(&timekeeper.hours, true);
+        twi_read_data(&timekeeper.day, true);
+        twi_read_data(&timekeeper.date, true);
+        twi_read_data(&timekeeper.month_century, true);
+        twi_read_data(&timekeeper.year, false);
+        twi_stop();
+        {
+            struct tm t = *localtime(&rtc_s);
+            t.tm_sec = bcd2u8(timekeeper.seconds);
+            t.tm_min = bcd2u8(timekeeper.minutes);
+            t.tm_hour = bcd2u8(timekeeper.hours & 0b0011'1111);
+            t.tm_wday = bcd2u8(timekeeper.day);
+            t.tm_mday = bcd2u8(timekeeper.date);
+            t.tm_mon = bcd2u8(timekeeper.month_century & 0b0001'1111);
+            t.tm_year = bcd2u8(timekeeper.year) + (2000 - YEAR_OFFSET);
+            rtc_s = mktime(&t);
+        }
+        SREG = sreg;
+    }
 
     enum {
         Counter,
@@ -105,12 +173,90 @@ int main(void) {
                     display = buffer_counter;
                     up = nullptr;
                     mode = Counter;
+                    {
+                        struct tm t = *localtime(&rtc_s);
+                        timekeeper.seconds = u82bcd(t.tm_sec);
+                        timekeeper.minutes = u82bcd(t.tm_min);
+                        timekeeper.hours = u82bcd(t.tm_hour) & 0b0011'1111;
+                        timekeeper.day = u82bcd(t.tm_wday);
+                        timekeeper.date = u82bcd(t.tm_mday);
+                        timekeeper.month_century |= u82bcd(t.tm_mon) & 0b0001'1111;
+                        timekeeper.year = u82bcd(t.tm_year - (2000 - YEAR_OFFSET));
+
+                        twi_start();
+                        twi_send_address(DS1337_SLA, TW_WRITE);
+                        twi_write_data(0x00);
+                        twi_write_data(timekeeper.seconds);
+                        twi_write_data(timekeeper.minutes);
+                        twi_write_data(timekeeper.hours);
+                        twi_write_data(timekeeper.day);
+                        twi_write_data(timekeeper.date);
+                        twi_write_data(timekeeper.month_century);
+                        twi_write_data(timekeeper.year);
+                        twi_stop();
+                        _delay_us(64);
+                    }
                     resume_counter();
                     break;
             }
             is_N_pressed = false;
         }
     }
+}
+
+void twi_init(void) {
+    /* Set Bit Rate Generator Unit
+    ** SCL frequency to 10kHz */
+    TWBR = 0b11000100;
+    TWSR &= ~_BV(TWPS1);
+    TWSR |= _BV(TWPS0);
+    /* Enable TWI interface */
+    TWCR |= _BV(TWEN);
+}
+
+bool twi_start(void) {
+    /* Send start bit */
+    TWCR = _BV(TWINT) | _BV(TWSTA) | _BV(TWEN);
+    loop_until_bit_is_set(TWCR, TWINT);
+    return TW_STATUS == TW_START;
+}
+
+bool twi_send_address(uint8_t address, bool tw_rw) {
+    TWDR = (address << 1) | tw_rw;
+    TWCR = _BV(TWINT) | _BV(TWEN);
+    loop_until_bit_is_set(TWCR, TWINT);
+    return TW_STATUS == (tw_rw ? TW_MR_SLA_ACK : TW_MT_SLA_ACK);
+}
+
+bool twi_write_data(uint8_t data) {
+    /* Send 00H register address of DS1337 */
+    TWDR = data;
+    TWCR = _BV(TWINT) | _BV(TWEN);
+    loop_until_bit_is_set(TWCR, TWINT);
+    return TW_STATUS == TW_MT_DATA_ACK;
+}
+
+bool twi_repeated_start(void) {
+    /* Send repeated start bit */
+    TWCR = _BV(TWINT) | _BV(TWSTA) | _BV(TWEN);
+    loop_until_bit_is_set(TWCR, TWINT);
+    return TW_STATUS == TW_REP_START;
+}
+
+bool twi_read_data(uint8_t *data, bool ack) {
+    /* received data with returning NOT ACK */
+    TWCR = _BV(TWINT) | (ack << TWEA) | _BV(TWEN);
+    loop_until_bit_is_set(TWCR, TWINT);
+    if (TW_STATUS == (ack ? TW_MR_DATA_ACK : TW_MR_DATA_NACK)) {
+        *data = TWDR;
+    }
+    return TW_STATUS == (ack ? TW_MR_DATA_ACK : TW_MR_DATA_NACK);
+}
+
+bool twi_stop(void) {
+    /* Send stop bit */
+    TWCR = _BV(TWINT) | _BV(TWSTO) | _BV(TWEN);
+    return true;
 }
 
 void fnd_init(void) {
@@ -152,9 +298,6 @@ void fnd_reset(void) {
 }
 
 void time_init(void) {
-    /* TODO: load rtc time */
-    rtc_s = 0;
-
     /* disable global interrupt */
     uint8_t sreg = SREG;
     cli();
@@ -232,7 +375,7 @@ void up_month(void) {
 
 void up_day(void) {
     struct tm t = *localtime(&rtc_s);
-    incwa(&t.tm_mday, month_length(t.tm_year, t.tm_mon), 1);
+    incwa(&t.tm_mday, month_length(t.tm_year, t.tm_mon + 1), 1);
     rtc_s = mktime(&t);
 }
 

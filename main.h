@@ -8,10 +8,19 @@
 #include <avr/interrupt.h>
 #include <avr/cpufunc.h>
 #include <util/delay.h>
+#include <util/twi.h>
 
 #define DDAY_EPOCH 946771200
 #define YEAR_OFFSET 1900
 #define MONTH_OFFSET 1
+
+void twi_init(void);
+bool twi_start(void);
+bool twi_send_address(uint8_t address, bool tw_rw);
+bool twi_write_data(uint8_t data);
+bool twi_repeated_start(void);
+bool twi_read_data(uint8_t *data, bool ack);
+bool twi_stop(void);
 
 void fnd_init(void);
 void fnd_display(void);
