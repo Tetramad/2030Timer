@@ -10,4 +10,4 @@ Timer displayed in seconds with time remaining until 2030.
 
 - [X] Displaying seconds until 2030 to FND
 - [X] Changing current time using buttons
-- [ ] Read and write current time using RTC
+- [X] Read and write current time using RTC
