@@ -148,13 +148,14 @@ void fnd_display(void) {
     for (int i = 8; i >= 0; --i) {
         uint8_t n = FND_LUT[buf[i]];
         for (int j = 0; j < 8; ++j) {
-            if (n & _BV(j)) {
+            if (n & 1) {
                 PORTF &= ~_BV(PORTF0);
             } else {
                 PORTF |= _BV(PORTF0);
             }
             PORTF |= _BV(PORTF4);
             PORTF &= ~_BV(PORTF4);
+            n >>= 1;
         }
     }
     PORTF |= _BV(PORTF6);

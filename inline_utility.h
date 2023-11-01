@@ -90,15 +90,23 @@ static inline uint8_t bcd_incwa(uint8_t val, uint8_t max, uint8_t reset) {
 
 static inline bool bcd_is_leap_year(uint8_t year) {
     /* assume year [00,99] as [2000, 2099] */
-
-    /* bit magic */
+    /* bit magic warning */
     /* hi = x >> 4
     ** lo = x & 0x0F
     ** k = 10*hi + lo
     ** if k is divisible by 4, then ((hi<<1) + low)&0b11 would be 0.
     ** Because we need only last 2 bit, replacing hi and lo to expression of x
     ** is maybe ok */
-    if (((((year & 0xF0) >> 3) + year) & 0b11) != 0b00) {
+
+    uint8_t hi = year >> 4;
+    uint8_t lo = year & 0x0F;
+
+    /* temporary calculation for optimization
+    ** both operands of shift operator are applied integer promotion.
+    ** because of that, compiler generates 16 bits operations.
+    ** so, by cut down to 8 bits again compiler knows my intention. */
+    hi = hi << 1;
+    if (((hi + lo) & 0b11) != 0x00) {
         return false;
     } else {
         return true;
