@@ -2,25 +2,13 @@
 #define MAIN_H
 
 #include <stdint.h>
-#include <time.h>
-#include <assert.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
-#include <avr/cpufunc.h>
 #include <util/delay.h>
 #include <util/twi.h>
 
 #define DDAY_EPOCH 946771200
-#define YEAR_OFFSET 1900
-#define MONTH_OFFSET 1
-
-void twi_init(void);
-bool twi_start(void);
-bool twi_send_address(uint8_t address, bool tw_rw);
-bool twi_write_data(uint8_t data);
-bool twi_repeated_start(void);
-bool twi_read_data(uint8_t *data, bool ack);
-bool twi_stop(void);
+#define YEAR_OFFSET 2000
 
 void fnd_init(void);
 void fnd_display(void);
@@ -31,8 +19,9 @@ enum {
     FND_ON = 11
 };
 
+typedef uint32_t time_t;
+
 time_t dday_s = DDAY_EPOCH;
-time_t rtc_s = 0;
 uint8_t buf[9] = { 0, };
 uint8_t const FND_LUT[] = {
     [0]=0b11111100,
@@ -49,7 +38,6 @@ uint8_t const FND_LUT[] = {
     [FND_ON]=0b11111111,
 };
 
-void time_init(void);
 void buffer_counter(void);
 void buffer_ymd(void);
 void buffer_hms(void);
@@ -65,7 +53,27 @@ bool is_U_pressed = false;
 bool is_N_pressed = false;
 
 void ctl_init(void);
-void stop_counter(void);
-void resume_counter(void);
+
+#define DS1337_SLA 0b1101000
+
+struct rtc_t {
+    uint8_t seconds;
+    uint8_t minutes;
+    uint8_t hours;
+    uint8_t day;
+    uint8_t date;
+    uint8_t month_century;
+    uint8_t year;
+};
+
+void rtc_init(void);
+void rtc_clock_enable(void);
+void rtc_clock_disable(void);
+void rtc_write_buffer(void);
+void rtc_read_buffer(void);
+void rtc_read_ymd(uint8_t *y, uint8_t *m, uint8_t *d);
+void rtc_read_hms(uint8_t *h, uint8_t *m, uint8_t *s);
+time_t rtc_mktime(struct rtc_t const *rtc);
+time_t rtc_difftime(time_t lhs, time_t rhs);
 
 #endif

@@ -1,79 +1,31 @@
 #include "main.h"
 #include "inline_utility.h"
+#include "inline_twi.h"
 
-#define DS1337_SLA 0b1101000
-#define DS1337_SLAX (DS1337_SLA << 1)
+struct rtc_t rtc = {
+    0b0000'0000,
+    0b0000'0000,
+    0b0000'0000,
+    0b0000'0001,
+    0b0000'0001,
+    0b1000'0001,
+    0b0000'0000
+};
 
-struct timekeeper_registers_t {
-    uint8_t seconds;
-    uint8_t minutes;
-    uint8_t hours;
-    uint8_t day;
-    uint8_t date;
-    uint8_t month_century;
-    uint8_t year;
-} timekeeper = { 0, };
-
-uint8_t bcd2u8(uint8_t bcd) {
-    return ((bcd >> 4) * 10) + (bcd & 0b0000'1111);
-}
-
-uint8_t u82bcd(uint8_t u8) {
-    assert(u8 < 100);
-    return ((u8 / 10) << 4) | (u8 % 10);
-}
+#define ceilof(big, small) \
+    (sizeof(big) + sizeof(small) - 1) / sizeof(small)
 
 int main(void) {
-    twi_init();
     fnd_init();
-    time_init();
     ctl_init();
+    rtc_init();
     sei();
 
-    {
-        uint8_t sreg = SREG;
-        cli();
-        if (bit_is_set(PINB, PINB6) && bit_is_set(PINB, PINB7)) {
-            twi_start();
-            twi_send_address(DS1337_SLA, TW_WRITE);
-            twi_write_data(0x00);
-            twi_write_data(0b0000'0000);
-            twi_write_data(0b0000'0000);
-            twi_write_data(0b0000'0000);
-            twi_write_data(0b0000'0001);
-            twi_write_data(0b0000'0001);
-            twi_write_data(0b1000'0000);
-            twi_write_data(0b0000'0000);
-            twi_stop();
-            _delay_us(64);
-        }
-
-        twi_start();
-        twi_send_address(DS1337_SLA, TW_WRITE);
-        twi_write_data(0x00);
-        twi_repeated_start();
-        twi_send_address(DS1337_SLA, TW_READ);
-        twi_read_data(&timekeeper.seconds, true);
-        twi_read_data(&timekeeper.minutes, true);
-        twi_read_data(&timekeeper.hours, true);
-        twi_read_data(&timekeeper.day, true);
-        twi_read_data(&timekeeper.date, true);
-        twi_read_data(&timekeeper.month_century, true);
-        twi_read_data(&timekeeper.year, false);
-        twi_stop();
-        {
-            struct tm t = *localtime(&rtc_s);
-            t.tm_sec = bcd2u8(timekeeper.seconds);
-            t.tm_min = bcd2u8(timekeeper.minutes);
-            t.tm_hour = bcd2u8(timekeeper.hours & 0b0011'1111);
-            t.tm_wday = bcd2u8(timekeeper.day);
-            t.tm_mday = bcd2u8(timekeeper.date);
-            t.tm_mon = bcd2u8(timekeeper.month_century & 0b0001'1111);
-            t.tm_year = bcd2u8(timekeeper.year) + (2000 - YEAR_OFFSET);
-            rtc_s = mktime(&t);
-        }
-        SREG = sreg;
+    if (bit_is_set(PINB, PINB6) && bit_is_set(PINB, PINB7)) {
+        rtc_write_buffer();
     }
+
+    rtc_read_buffer();
 
     enum {
         Counter,
@@ -92,41 +44,43 @@ int main(void) {
     for (;;) {
         _delay_ms(100);
         display();
-        if (cnt > 3) {
-            switch (mode) {
-                case Counter:
-                    break;
-                case YMD_Y:
-                    buf[1] = FND_OFF;
-                    buf[2] = FND_OFF;
-                    buf[3] = FND_OFF;
-                    buf[4] = FND_OFF;
-                    break;
-                case YMD_M:
-                    buf[5] = FND_OFF;
-                    buf[6] = FND_OFF;
-                    break;
-                case YMD_D:
-                    buf[7] = FND_OFF;
-                    buf[8] = FND_OFF;
-                    break;
-                case HMS_H:
-                    buf[1] = FND_OFF;
-                    buf[2] = FND_OFF;
-                    break;
-                case HMS_M:
-                    buf[4] = FND_OFF;
-                    buf[5] = FND_OFF;
-                    break;
-                case HMS_S:
-                    buf[7] = FND_OFF;
-                    buf[8] = FND_OFF;
-                    break;
+        if (display == buffer_ymd || display == buffer_hms) {
+            if (cnt > 2) {
+                switch (mode) {
+                    case Counter:
+                        break;
+                    case YMD_Y:
+                        buf[1] = FND_OFF;
+                        buf[2] = FND_OFF;
+                        buf[3] = FND_OFF;
+                        buf[4] = FND_OFF;
+                        break;
+                    case YMD_M:
+                        buf[5] = FND_OFF;
+                        buf[6] = FND_OFF;
+                        break;
+                    case YMD_D:
+                        buf[7] = FND_OFF;
+                        buf[8] = FND_OFF;
+                        break;
+                    case HMS_H:
+                        buf[1] = FND_OFF;
+                        buf[2] = FND_OFF;
+                        break;
+                    case HMS_M:
+                        buf[4] = FND_OFF;
+                        buf[5] = FND_OFF;
+                        break;
+                    case HMS_S:
+                        buf[7] = FND_OFF;
+                        buf[8] = FND_OFF;
+                        break;
+                }
             }
-        }
-        ++cnt;
-        if (cnt > 7) {
-            cnt = 0;
+            ++cnt;
+            if (cnt > 5) {
+                cnt = 0;
+            }
         }
         fnd_display();
 
@@ -146,7 +100,7 @@ int main(void) {
                     display = buffer_ymd;
                     up = up_year;
                     mode = YMD_Y;
-                    stop_counter();
+                    rtc_clock_disable();
                     break;
                 case YMD_Y:
                     up = up_month;
@@ -173,90 +127,12 @@ int main(void) {
                     display = buffer_counter;
                     up = nullptr;
                     mode = Counter;
-                    {
-                        struct tm t = *localtime(&rtc_s);
-                        timekeeper.seconds = u82bcd(t.tm_sec);
-                        timekeeper.minutes = u82bcd(t.tm_min);
-                        timekeeper.hours = u82bcd(t.tm_hour) & 0b0011'1111;
-                        timekeeper.day = u82bcd(t.tm_wday);
-                        timekeeper.date = u82bcd(t.tm_mday);
-                        timekeeper.month_century |= u82bcd(t.tm_mon) & 0b0001'1111;
-                        timekeeper.year = u82bcd(t.tm_year - (2000 - YEAR_OFFSET));
-
-                        twi_start();
-                        twi_send_address(DS1337_SLA, TW_WRITE);
-                        twi_write_data(0x00);
-                        twi_write_data(timekeeper.seconds);
-                        twi_write_data(timekeeper.minutes);
-                        twi_write_data(timekeeper.hours);
-                        twi_write_data(timekeeper.day);
-                        twi_write_data(timekeeper.date);
-                        twi_write_data(timekeeper.month_century);
-                        twi_write_data(timekeeper.year);
-                        twi_stop();
-                        _delay_us(64);
-                    }
-                    resume_counter();
+                    rtc_clock_enable();
                     break;
             }
             is_N_pressed = false;
         }
     }
-}
-
-void twi_init(void) {
-    /* Set Bit Rate Generator Unit
-    ** SCL frequency to 10kHz */
-    TWBR = 0b11000100;
-    TWSR &= ~_BV(TWPS1);
-    TWSR |= _BV(TWPS0);
-    /* Enable TWI interface */
-    TWCR |= _BV(TWEN);
-}
-
-bool twi_start(void) {
-    /* Send start bit */
-    TWCR = _BV(TWINT) | _BV(TWSTA) | _BV(TWEN);
-    loop_until_bit_is_set(TWCR, TWINT);
-    return TW_STATUS == TW_START;
-}
-
-bool twi_send_address(uint8_t address, bool tw_rw) {
-    TWDR = (address << 1) | tw_rw;
-    TWCR = _BV(TWINT) | _BV(TWEN);
-    loop_until_bit_is_set(TWCR, TWINT);
-    return TW_STATUS == (tw_rw ? TW_MR_SLA_ACK : TW_MT_SLA_ACK);
-}
-
-bool twi_write_data(uint8_t data) {
-    /* Send 00H register address of DS1337 */
-    TWDR = data;
-    TWCR = _BV(TWINT) | _BV(TWEN);
-    loop_until_bit_is_set(TWCR, TWINT);
-    return TW_STATUS == TW_MT_DATA_ACK;
-}
-
-bool twi_repeated_start(void) {
-    /* Send repeated start bit */
-    TWCR = _BV(TWINT) | _BV(TWSTA) | _BV(TWEN);
-    loop_until_bit_is_set(TWCR, TWINT);
-    return TW_STATUS == TW_REP_START;
-}
-
-bool twi_read_data(uint8_t *data, bool ack) {
-    /* received data with returning NOT ACK */
-    TWCR = _BV(TWINT) | (ack << TWEA) | _BV(TWEN);
-    loop_until_bit_is_set(TWCR, TWINT);
-    if (TW_STATUS == (ack ? TW_MR_DATA_ACK : TW_MR_DATA_NACK)) {
-        *data = TWDR;
-    }
-    return TW_STATUS == (ack ? TW_MR_DATA_ACK : TW_MR_DATA_NACK);
-}
-
-bool twi_stop(void) {
-    /* Send stop bit */
-    TWCR = _BV(TWINT) | _BV(TWSTO) | _BV(TWEN);
-    return true;
 }
 
 void fnd_init(void) {
@@ -297,37 +173,9 @@ void fnd_reset(void) {
     PORTF &= ~_BV(PORTF6);
 }
 
-void time_init(void) {
-    /* disable global interrupt */
-    uint8_t sreg = SREG;
-    cli();
-    /* Timer1 Configuration */
-    /* Compare Output Mode to Normal port opertaion */
-    TCCR1A &= ~(_BV(COM1A1) | _BV(COM1A0));
-    /* Waveform Generation Mode to
-    ** CTC(Clear Timer on Compare match)
-    ** TOP as OCRnA
-    ** Update of OCRnX at Immediate
-    ** TOVn Flag Set on MAX */
-    TCCR1A &= ~(_BV(WGM11) | _BV(WGM10));
-    TCCR1B &= ~_BV(WGM13);
-    TCCR1B |= _BV(WGM12);
-    /* Output Compare Register to 1s(16000000 / 1024) */
-    OCR1A = 0b11110100001001;
-    /* Output Compare A Match Interrupt Enable */
-    TIMSK1 |= _BV(OCIE1A);
-    /* Clear Timer/Counter1 */
-    TCNT1 = 0;
-    /* Clock Select to 1024 prescaler */
-    TCCR1B &= ~(_BV(CS12) | _BV(CS11) | _BV(CS10));
-    TCCR1B |= _BV(CS12) | _BV(CS10);
-    /* reset global interrupt */
-    SREG = sreg;
-}
-
 void buffer_counter(void) {
-    int32_t remain_s = difftime(dday_s, rtc_s);
-    assert(remain_s >= 0);
+    rtc_read_buffer();
+    time_t remain_s = rtc_difftime(dday_s, rtc_mktime(&rtc));
 
     for (int i = 8; i >= 0; --i) {
         buf[i] = remain_s % 10;
@@ -336,101 +184,274 @@ void buffer_counter(void) {
 }
 
 void buffer_ymd(void) {
-    struct tm const t = *localtime(&rtc_s);
-    int16_t const year = t.tm_year + 1900;
-    int8_t const mon = t.tm_mon + 1;
-    int8_t const mday = t.tm_mday;
+    uint8_t date = 0;
+    uint8_t month = 0;
+    uint8_t year = 0;
 
-    u8rprint(buf, 8, 7, mday);
-    u8rprint(buf, 6, 5, mon);
-    u8rprint(buf, 4, 1, year);
+    rtc_read_ymd(&year, &month, &date);
+
     buf[0] = FND_OFF;
+    buf[1] = 2;
+    buf[2] = 0;
+    buf[3] = year >> 4;
+    buf[4] = year & 0x0F;
+    buf[5] = month >> 4;
+    buf[6] = month & 0x0F;
+    buf[7] = date >> 4;
+    buf[8] = date & 0x0F;
 }
 
 void buffer_hms(void) {
-    struct tm const t = *localtime(&rtc_s);
-    int8_t const hour = t.tm_hour;
-    int8_t const min = t.tm_min;
-    int8_t const sec = t.tm_sec;
+    uint8_t seconds = 0;
+    uint8_t minutes = 0;
+    uint8_t hours = 0;
 
-    u8rprint(buf, 8, 7, sec);
-    buf[6] = FND_OFF;
-    u8rprint(buf, 5, 4, min);
-    buf[3] = FND_OFF;
-    u8rprint(buf, 2, 1, hour);
+    rtc_read_hms(&hours, &minutes, &seconds);
+
     buf[0] = FND_OFF;
+    buf[1] = hours >> 4;
+    buf[2] = hours & 0x0F;
+    buf[3] = FND_OFF;
+    buf[4] = minutes >> 4;
+    buf[5] = minutes & 0x0F;
+    buf[6] = FND_OFF;
+    buf[7] = seconds >> 4;
+    buf[8] = seconds & 0x0F;
 }
 
 void up_year(void) {
-    struct tm t = *localtime(&rtc_s);
-    incwa(&t.tm_year, 2029 - YEAR_OFFSET, 2000 - YEAR_OFFSET);
-    rtc_s = mktime(&t);
+    rtc_read_buffer();
+    rtc.year = bcd_incwa(rtc.year, 0x29, 0x00);
+    rtc_write_buffer();
 }
 
 void up_month(void) {
-    struct tm t = *localtime(&rtc_s);
-    incwa(&t.tm_mon, 12 - MONTH_OFFSET, 0);
-    rtc_s = mktime(&t);
+    rtc_read_buffer();
+    rtc.month_century = bcd_incwa(rtc.month_century & 0b0001'1111, 0x12, 0x01) | 0b1000'0000;
+    rtc_write_buffer();
 }
 
 void up_day(void) {
-    struct tm t = *localtime(&rtc_s);
-    incwa(&t.tm_mday, month_length(t.tm_year, t.tm_mon + 1), 1);
-    rtc_s = mktime(&t);
+    uint8_t date = 0;
+    uint8_t month = 0;
+    uint8_t year = 0;
+    rtc_read_ymd(&year, &month, &date);
+    rtc.date = bcd_incwa(date, bcd_month_length(year, month), 0x01);
+    rtc_write_buffer();
 }
 
 void up_hour(void) {
-    struct tm t = *localtime(&rtc_s);
-    incwa(&t.tm_hour, 23, 0);
-    rtc_s = mktime(&t);
+    rtc_read_buffer();
+    rtc.hours = bcd_incwa(rtc.hours, 0x23, 0x00);
+    rtc_write_buffer();
 }
 
 void up_minute(void) {
-    struct tm t = *localtime(&rtc_s);
-    incwa(&t.tm_min, 59, 0);
-    rtc_s = mktime(&t);
+    rtc_read_buffer();
+    rtc.minutes = bcd_incwa(rtc.minutes, 0x59, 0x00);
+    rtc_write_buffer();
 }
 
 void up_second(void) {
-    struct tm t = *localtime(&rtc_s);
-    incwa(&t.tm_sec, 59, 0);
-    rtc_s = mktime(&t);
+    rtc_read_buffer();
+    rtc.seconds = bcd_incwa(rtc.seconds, 0x59, 0x00);
+    rtc_write_buffer();
 }
 
 void ctl_init(void) {
-    uint8_t sreg = { 0 };
     /* GPIO settings */
     DDRB &= ~(_BV(PORTB6) | _BV(PORTB7));
     DDRE &= ~_BV(PORTE6);
     PORTB &= ~(_BV(PORTB6) | _BV(PORTB7));
     PORTE &= ~_BV(PORTE6);
 
-    /* disable global interrupt */
-    sreg = SREG;
+    {
+        uint8_t sreg = SREG;
+        cli();
+
+        /* set INT6 to rising edge detection */
+        EICRB |= _BV(ISC61) | _BV(ISC60);
+        /* enable INT6 */
+        EIMSK |= _BV(INT6);
+
+        SREG = sreg;
+    }
+}
+
+void rtc_init(void) {
+    /* Set Bit Rate Generator Unit
+    ** SCL frequency to 10kHz */
+    twi_bitrate(0b11000100);
+    twi_prescaler(0x01);
+    /* Enable TWI interface */
+    twi_enable();
+}
+
+void rtc_clock_enable(void) {
+    uint8_t sreg = SREG;
     cli();
-    /* set INT6 to rising edge detection */
-    EICRB |= _BV(ISC61) | _BV(ISC60);
-    /* enable INT6 */
-    EIMSK |= _BV(INT6);
-    /* reset global interrupt */
+
+    twi_start();
+    twi_send_address(DS1337_SLA, TW_WRITE);
+    twi_write_data(0x0E);
+    twi_write_data(0b0000'0000);
+    twi_stop();
+
     SREG = sreg;
 }
 
-void stop_counter(void) {
+void rtc_clock_disable(void) {
     uint8_t sreg = SREG;
     cli();
-    TCCR1B &= ~(_BV(CS12) | _BV(CS11) | _BV(CS10));
-    TCNT1 = 0;
+
+    twi_start();
+    twi_send_address(DS1337_SLA, TW_WRITE);
+    twi_write_data(0x0E);
+    twi_write_data(0b1000'0000);
+    twi_stop();
+
     SREG = sreg;
 }
 
-void resume_counter(void) {
+void rtc_write_buffer(void) {
     uint8_t sreg = SREG;
     cli();
-    TCNT1 = 0;
-    TCCR1B &= ~(_BV(CS12) | _BV(CS11) | _BV(CS10));
-    TCCR1B |= _BV(CS12) | _BV(CS10);
+
+    twi_start();
+    twi_send_address(DS1337_SLA, TW_WRITE);
+    twi_write_data(0x00);
+    twi_write_data_burst(ceilof(struct rtc_t, uint8_t), (uint8_t *)&rtc);
+    twi_stop();
+
     SREG = sreg;
+}
+
+void rtc_read_buffer(void) {
+    uint8_t sreg = SREG;
+    cli();
+
+    twi_start();
+    twi_send_address(DS1337_SLA, TW_WRITE);
+    twi_write_data(0x00);
+    twi_repeated_start();
+    twi_send_address(DS1337_SLA, TW_READ);
+    twi_read_data_burst(ceilof(struct rtc_t, uint8_t), (uint8_t *)&rtc);
+    twi_stop();
+
+    SREG = sreg;
+}
+
+void rtc_read_ymd(uint8_t *y, uint8_t *m, uint8_t *d) {
+    uint8_t sreg = SREG;
+    cli();
+    twi_start();
+    twi_send_address(DS1337_SLA, TW_WRITE);
+    twi_write_data(0x04);
+    twi_repeated_start();
+    twi_send_address(DS1337_SLA, TW_READ);
+    twi_read_data(d, true);
+    twi_read_data(m, true);
+    twi_read_data(y, false);
+    twi_stop();
+    SREG = sreg;
+
+    *m &= 0b0001'1111;
+}
+
+void rtc_read_hms(uint8_t *h, uint8_t *m, uint8_t *s) {
+    uint8_t sreg = SREG;
+    cli();
+    twi_start();
+    twi_send_address(DS1337_SLA, TW_WRITE);
+    twi_write_data(0x00);
+    twi_repeated_start();
+    twi_send_address(DS1337_SLA, TW_READ);
+    twi_read_data(s, true);
+    twi_read_data(m, true);
+    twi_read_data(h, false);
+    twi_stop();
+    SREG = sreg;
+}
+
+time_t rtc_mktime(struct rtc_t const *rtc) {
+    time_t t = 0;
+
+    uint16_t year = (rtc->year >> 4) * 10 + (rtc->year & 0x0F);
+    t += (365 * 4 + 1) * (year >> 2);
+    switch (year & 0b11) {
+        case 0b11:
+            t += 365;
+            [[fallthrough]];
+        case 0b10:
+            t += 365;
+            [[fallthrough]];
+        case 0b01:
+            t += 365 + 1;
+            [[fallthrough]];
+        case 0b00:
+            break;
+    }
+
+    uint8_t month = ((rtc->month_century & 0x10) ? 10 : 0) + (rtc->month_century & 0x0F);
+
+    switch (month) {
+        case 12:
+            t += 30;
+            [[fallthrough]];
+        case 11:
+            t += 31;
+            [[fallthrough]];
+        case 10:
+            t += 30;
+            [[fallthrough]];
+        case 9:
+            t += 31;
+            [[fallthrough]];
+        case 8:
+            t += 31;
+            [[fallthrough]];
+        case 7:
+            t += 30;
+            [[fallthrough]];
+        case 6:
+            t += 31;
+            [[fallthrough]];
+        case 5:
+            t += 30;
+            [[fallthrough]];
+        case 4:
+            t += 31;
+            [[fallthrough]];
+        case 3:
+            t += 28 + (bcd_is_leap_year(rtc->year) ? 1 : 0);
+            [[fallthrough]];
+        case 2:
+            t += 31;
+            [[fallthrough]];
+        case 1:
+            break;
+    }
+
+    uint8_t date = (rtc->date >> 4) * 10 + (rtc->date & 0x0F);
+    t += date - 1;
+
+    uint8_t hours = (rtc->hours >> 4) * 10 + (rtc->hours & 0x0F);
+    t *= 24;
+    t += hours;
+
+    uint8_t minutes = (rtc->minutes >> 4) * 10 + (rtc->minutes & 0x0F);
+    t *= 60;
+    t += minutes;
+
+    uint8_t seconds = (rtc->seconds >> 4) * 10 + (rtc->seconds & 0x0F);
+    t *= 60;
+    t += seconds;
+
+    return t;
+}
+
+time_t rtc_difftime(time_t lhs, time_t rhs) {
+    return lhs - rhs;
 }
 
 #ifdef __clang__
@@ -445,10 +466,6 @@ ISR(INT6_vect) {
     if (bit_is_set(PINB, PINB7)) {
         is_U_pressed = true;
     }
-}
-
-ISR(TIMER1_COMPA_vect) {
-    ++rtc_s;
 }
 
 #ifdef __clang__
