@@ -277,9 +277,9 @@ void ctl_init(void) {
 
 void rtc_init(void) {
     /* Set Bit Rate Generator Unit
-    ** SCL frequency to 10kHz */
-    twi_bitrate(0b11000100);
-    twi_prescaler(0x01);
+    ** SCL frequency to about 76.923kHz */
+    twi_bitrate(0b0110'0000);
+    twi_prescaler(0x00);
     /* Enable TWI interface */
     twi_enable();
 }
