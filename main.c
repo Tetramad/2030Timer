@@ -260,18 +260,16 @@ void up_second(void) {
 void ctl_init(void) {
     /* GPIO settings */
     DDRB &= ~(_BV(PORTB6) | _BV(PORTB7));
-    DDRE &= ~_BV(PORTE6);
     PORTB &= ~(_BV(PORTB6) | _BV(PORTB7));
-    PORTE &= ~_BV(PORTE6);
 
     {
         uint8_t sreg = SREG;
         cli();
 
-        /* set INT6 to rising edge detection */
-        EICRB |= _BV(ISC61) | _BV(ISC60);
-        /* enable INT6 */
-        EIMSK |= _BV(INT6);
+        /* set mask for enabling pin change interrupt for PCINT7 and PCINT6 */
+        PCMSK0 |= _BV(PCINT7) | _BV(PCINT6);
+        /* enable PCINT source 0 */
+        PCICR = _BV(PCIE0);
 
         SREG = sreg;
     }
@@ -458,7 +456,7 @@ time_t rtc_difftime(time_t lhs, time_t rhs) {
 #pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
 #endif
 
-ISR(INT6_vect) {
+ISR(PCINT0_vect) {
     if (bit_is_set(PINB, PINB6)) {
         is_N_pressed = true;
     }
