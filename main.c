@@ -21,10 +21,6 @@ int main(void) {
     rtc_init();
     sei();
 
-    if (bit_is_set(PINB, PINB6) && bit_is_set(PINB, PINB7)) {
-        rtc_write_buffer();
-    }
-
     rtc_read_buffer();
 
     enum {
