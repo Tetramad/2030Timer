@@ -262,10 +262,6 @@ void ctl_init(void) {
     DDRB &= ~(_BV(PORTB6) | _BV(PORTB7));
     PORTB &= ~(_BV(PORTB6) | _BV(PORTB7));
 
-    /* Builtin LED */
-    DDRC |= _BV(PORTC7);
-    PORTC &= ~_BV(PORTC7);
-
     {
         uint8_t sreg = SREG;
         cli();

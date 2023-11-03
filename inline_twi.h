@@ -57,8 +57,6 @@ static inline void twi_read_data(uint8_t sla, uint8_t loc, uint8_t *receive) {
 #pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
 #endif
 
-#define PROBE do { PORTC |= _BV(PORTC7); } while (false)
-
 ISR(TWI_vect) {
     switch (twic) {
         case TWIC_WRITE_SLA:
