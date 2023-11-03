@@ -1,6 +1,13 @@
 #include "main.h"
 #include "inline_utility.h"
+#define TWI_USE_INT
+
+#ifdef TWI_USE_INT
+#include "inline_twii.h"
+#else
 #include "inline_twi.h"
+#endif
+
 
 struct rtc_t rtc = {
     0b0000'0000,
@@ -262,6 +269,10 @@ void ctl_init(void) {
     DDRB &= ~(_BV(PORTB6) | _BV(PORTB7));
     PORTB &= ~(_BV(PORTB6) | _BV(PORTB7));
 
+    /* Builtin LED */
+    DDRC |= _BV(PORTC7);
+    PORTC &= ~_BV(PORTC7);
+
     {
         uint8_t sreg = SREG;
         cli();
@@ -278,13 +289,25 @@ void ctl_init(void) {
 void rtc_init(void) {
     /* Set Bit Rate Generator Unit
     ** SCL frequency to about 76.923kHz */
+#ifdef TWI_USE_INT
+    twii_bitrate(0b0110'0000);
+    twii_prescaler(0x00);
+#else
     twi_bitrate(0b0110'0000);
     twi_prescaler(0x00);
+#endif
     /* Enable TWI interface */
+#ifdef TWI_USE_INT
+    twii_enable();
+#else
     twi_enable();
+#endif
 }
 
 void rtc_clock_enable(void) {
+#ifdef TWI_USE_INT
+    twii_write_data(DS1337_SLA, 0x0E, 0b0000'0000);
+#else
     uint8_t sreg = SREG;
     cli();
 
@@ -295,9 +318,13 @@ void rtc_clock_enable(void) {
     twi_stop();
 
     SREG = sreg;
+#endif
 }
 
 void rtc_clock_disable(void) {
+#ifdef TWI_USE_INT
+    twii_write_data(DS1337_SLA, 0x0E, 0b1000'0000);
+#else
     uint8_t sreg = SREG;
     cli();
 
@@ -308,9 +335,19 @@ void rtc_clock_disable(void) {
     twi_stop();
 
     SREG = sreg;
+#endif
 }
 
 void rtc_write_buffer(void) {
+#ifdef TWI_USE_INT
+    twii_write_data(DS1337_SLA, 0x00, rtc.seconds);
+    twii_write_data(DS1337_SLA, 0x01, rtc.minutes);
+    twii_write_data(DS1337_SLA, 0x02, rtc.hours);
+    twii_write_data(DS1337_SLA, 0x03, rtc.day);
+    twii_write_data(DS1337_SLA, 0x04, rtc.date);
+    twii_write_data(DS1337_SLA, 0x05, rtc.month_century);
+    twii_write_data(DS1337_SLA, 0x06, rtc.year);
+#else
     uint8_t sreg = SREG;
     cli();
 
@@ -321,9 +358,19 @@ void rtc_write_buffer(void) {
     twi_stop();
 
     SREG = sreg;
+#endif
 }
 
 void rtc_read_buffer(void) {
+#ifdef TWI_USE_INT
+    twii_read_data(DS1337_SLA, 0x00, &rtc.seconds);
+    twii_read_data(DS1337_SLA, 0x01, &rtc.minutes);
+    twii_read_data(DS1337_SLA, 0x02, &rtc.hours);
+    twii_read_data(DS1337_SLA, 0x03, &rtc.day);
+    twii_read_data(DS1337_SLA, 0x04, &rtc.date);
+    twii_read_data(DS1337_SLA, 0x05, &rtc.month_century);
+    twii_read_data(DS1337_SLA, 0x06, &rtc.year);
+#else
     uint8_t sreg = SREG;
     cli();
 
@@ -336,9 +383,16 @@ void rtc_read_buffer(void) {
     twi_stop();
 
     SREG = sreg;
+#endif
 }
 
 void rtc_read_ymd(uint8_t *y, uint8_t *m, uint8_t *d) {
+#ifdef TWI_USE_INT
+    rtc_read_buffer();
+    *y = rtc.year;
+    *m = rtc.month_century & 0b0001'1111;
+    *d = rtc.date;
+#else
     uint8_t sreg = SREG;
     cli();
     twi_start();
@@ -353,9 +407,16 @@ void rtc_read_ymd(uint8_t *y, uint8_t *m, uint8_t *d) {
     SREG = sreg;
 
     *m &= 0b0001'1111;
+#endif
 }
 
 void rtc_read_hms(uint8_t *h, uint8_t *m, uint8_t *s) {
+#ifdef TWI_USE_INT
+    rtc_read_buffer();
+    *h = rtc.hours;
+    *m = rtc.minutes;
+    *s = rtc.seconds;
+#else
     uint8_t sreg = SREG;
     cli();
     twi_start();
@@ -368,6 +429,7 @@ void rtc_read_hms(uint8_t *h, uint8_t *m, uint8_t *s) {
     twi_read_data(h, false);
     twi_stop();
     SREG = sreg;
+#endif
 }
 
 time_t rtc_mktime(struct rtc_t const *rtc) {
