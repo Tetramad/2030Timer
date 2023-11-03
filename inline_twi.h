@@ -1,5 +1,29 @@
+#include <stdint.h>
 #include <avr/io.h>
+#include <avr/interrupt.h>
 #include <util/twi.h>
+
+enum {
+    TWIC_STO,
+    TWIC_WRITE_SLA,
+    TWIC_WRITE_LOC,
+    TWIC_WRITE_DATA,
+    TWIC_READ_SLA,
+    TWIC_READ_SELECT,
+    TWIC_READ_REP,
+    TWIC_READ_REP_SLA,
+    TWIC_READ_READY,
+    TWIC_READ_DATA,
+} volatile twic = TWIC_STO;
+
+volatile uint8_t twic_sla = 0x00;
+volatile uint8_t twic_loc = 0x00;
+volatile uint8_t twic_data = 0x00;
+uint8_t * volatile twic_receive = nullptr;
+
+static inline void twi_enable(void) {
+    TWCR = _BV(TWEN) | _BV(TWIE);
+}
 
 static inline void twi_bitrate(uint8_t bitrate) {
     TWBR = bitrate;
@@ -10,80 +34,119 @@ static inline void twi_prescaler(uint8_t prescaler) {
     TWSR = prescaler & 0b01 ? TWSR | _BV(TWPS1) : TWSR & ~_BV(TWPS1);
 }
 
-static inline void twi_enable(void) {
-    TWCR |= _BV(TWEN);
+static inline void twi_write_data(uint8_t sla, uint8_t loc, uint8_t data) {
+    while (twic != TWIC_STO) {}
+    twic_sla = sla;
+    twic_loc = loc;
+    twic_data = data;
+    twic = TWIC_WRITE_SLA;
+    TWCR = _BV(TWINT) | _BV(TWSTA) | _BV(TWEN) | _BV(TWIE);
 }
 
-static inline bool twi_start(void) {
-    /* Send start bit */
-    TWCR = _BV(TWINT) | _BV(TWSTA) | _BV(TWEN);
-    loop_until_bit_is_set(TWCR, TWINT);
-    return TW_STATUS == TW_START;
+static inline void twi_read_data(uint8_t sla, uint8_t loc, uint8_t *receive) {
+    while (twic != TWIC_STO) {}
+    twic_sla = sla;
+    twic_loc = loc;
+    twic_receive = receive;
+    twic = TWIC_READ_SLA;
+    TWCR = _BV(TWINT) | _BV(TWSTA) | _BV(TWEN) | _BV(TWIE);
 }
 
-static inline bool twi_send_address(uint8_t address, bool tw_rw) {
-    TWDR = (address << 1) | tw_rw;
-    TWCR = _BV(TWINT) | _BV(TWEN);
-    loop_until_bit_is_set(TWCR, TWINT);
-    return TW_STATUS == (tw_rw ? TW_MR_SLA_ACK : TW_MT_SLA_ACK);
-}
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
+#endif
 
-static inline bool twi_write_data(uint8_t data) {
-    TWDR = data;
-    TWCR = _BV(TWINT) | _BV(TWEN);
-    loop_until_bit_is_set(TWCR, TWINT);
-    return TW_STATUS == TW_MT_DATA_ACK;
-}
+#define PROBE do { PORTC |= _BV(PORTC7); } while (false)
 
-static inline bool twi_write_data_burst(int n, uint8_t data[static n]) {
-    bool result = true;
-    for (int i = 0; result && i < n; ++i) {
-        TWDR = data[i];
-        TWCR = _BV(TWINT) | _BV(TWEN);
-        loop_until_bit_is_set(TWCR, TWINT);
-        result = result && (TW_STATUS == TW_MT_DATA_ACK);
+ISR(TWI_vect) {
+    switch (twic) {
+        case TWIC_WRITE_SLA:
+            if (TW_STATUS == TW_START) {
+                TWDR = (twic_sla << 1) | TW_WRITE;
+                twic = TWIC_WRITE_LOC;
+                TWCR = _BV(TWINT) | _BV(TWEN) | _BV(TWIE);
+                return;
+            } else {
+                break;
+            }
+        case TWIC_WRITE_LOC:
+            if (TW_STATUS == TW_MT_SLA_ACK) {
+                TWDR = twic_loc;
+                twic = TWIC_WRITE_DATA;
+                TWCR = _BV(TWINT) | _BV(TWEN) | _BV(TWIE);
+                return;
+            } else {
+                break;
+            }
+        case TWIC_WRITE_DATA:
+            if (TW_STATUS == TW_MT_DATA_ACK) {
+                TWDR = twic_data;
+                twic = TWIC_STO;
+                TWCR = _BV(TWINT) | _BV(TWEN) | _BV(TWIE);
+                return;
+            } else {
+                break;
+            }
+        case TWIC_READ_SLA:
+            if (TW_STATUS == TW_START) {
+                TWDR = (twic_sla << 1) | TW_WRITE;
+                twic = TWIC_READ_SELECT;
+                TWCR = _BV(TWINT) | _BV(TWEN) | _BV(TWIE);
+                return;
+            } else {
+                break;
+            }
+        case TWIC_READ_SELECT:
+            if (TW_STATUS == TW_MT_SLA_ACK) {
+                TWDR = twic_loc;
+                twic = TWIC_READ_REP;
+                TWCR = _BV(TWINT) | _BV(TWEN) | _BV(TWIE);
+                return;
+            } {
+                break;
+            }
+        case TWIC_READ_REP:
+            if (TW_STATUS == TW_MT_DATA_ACK) {
+                twic = TWIC_READ_REP_SLA;
+                TWCR = _BV(TWINT) | _BV(TWSTA) | _BV(TWEN) | _BV(TWIE);
+                return;
+            } else {
+                break;
+            }
+        case TWIC_READ_REP_SLA:
+            if (TW_STATUS == TW_REP_START) {
+                TWDR = (twic_sla << 1) | TW_READ;
+                twic = TWIC_READ_READY;
+                TWCR = _BV(TWINT) | _BV(TWEN) | _BV(TWIE);
+                return;
+            } else {
+                break;
+            }
+        case TWIC_READ_READY:
+            if (TW_STATUS == TW_MR_SLA_ACK) {
+                twic = TWIC_READ_DATA;
+                TWCR = _BV(TWINT) | _BV(TWEN) | _BV(TWIE);
+                return;
+            } else {
+                break;
+            }
+        case TWIC_READ_DATA:
+            if (TW_STATUS == TW_MR_DATA_NACK) {
+                *twic_receive = TWDR;
+                twic = TWIC_STO;
+                TWCR = _BV(TWINT) | _BV(TWSTO) | _BV(TWEN) | _BV(TWIE);
+                return;
+            } else {
+                break;
+            }
+        case TWIC_STO:
+            break;
     }
-    return result;
+    twic = TWIC_STO;
+    TWCR = _BV(TWINT) | _BV(TWSTO) | _BV(TWEN) | _BV(TWIE);
 }
 
-static inline bool twi_repeated_start(void) {
-    /* Send repeated start bit */
-    TWCR = _BV(TWINT) | _BV(TWSTA) | _BV(TWEN);
-    loop_until_bit_is_set(TWCR, TWINT);
-    return TW_STATUS == TW_REP_START;
-}
-
-static inline bool twi_read_data(uint8_t *data, bool ack) {
-    TWCR = _BV(TWINT) | (ack << TWEA) | _BV(TWEN);
-    loop_until_bit_is_set(TWCR, TWINT);
-    if (TW_STATUS == (ack ? TW_MR_DATA_ACK : TW_MR_DATA_NACK)) {
-        *data = TWDR;
-    }
-    return TW_STATUS == (ack ? TW_MR_DATA_ACK : TW_MR_DATA_NACK);
-}
-
-static inline bool twi_read_data_burst(int n, uint8_t data[static n]) {
-    bool result = true;
-    for (int i = 0; result && i < n - 1; ++i) {
-        TWCR = _BV(TWINT) | _BV(TWEA) | _BV(TWEN);
-        loop_until_bit_is_set(TWCR, TWINT);
-        result = result && (TW_STATUS == TW_MR_DATA_ACK);
-        if (result) {
-            data[i] = TWDR;
-        }
-    }
-    TWCR = _BV(TWINT) | _BV(TWEN);
-    loop_until_bit_is_set(TWCR, TWINT);
-    result = result && (TW_STATUS == TW_MR_DATA_NACK);
-    if (result) {
-        data[n - 1] = TWDR;
-    }
-    return result;
-}
-
-static inline bool twi_stop(void) {
-    /* Send stop bit */
-    TWCR = _BV(TWINT) | _BV(TWSTO) | _BV(TWEN);
-    return true;
-}
-
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
