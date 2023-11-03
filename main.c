@@ -262,6 +262,14 @@ void ctl_init(void) {
     DDRB &= ~(_BV(PORTB6) | _BV(PORTB7));
     PORTB &= ~(_BV(PORTB6) | _BV(PORTB7));
 
+    /* Timer1 stop clock */
+    TCCR1B &= ~(_BV(CS12) | _BV(CS11) | _BV(CS10));
+    /* Timer1 clear */
+    TCNT1 = 0x0000;
+
+    /* Timer1 enable overflow interrupt */
+    TIMSK1 |= _BV(TOIE1);
+
     {
         uint8_t sreg = SREG;
         cli();
@@ -419,6 +427,23 @@ ISR(PCINT0_vect) {
     if (bit_is_set(PINB, PINB7)) {
         is_U_pressed = true;
     }
+    /* Timer1 clear */
+    TCNT1 = 0x0000;
+    /* Timer1 prescale 8 */
+    TCCR1B |= _BV(CS10);
+    /* disable PCINT source 0 */
+    PCICR &= ~_BV(PCIE0);
+    PCIFR |= _BV(PCIF0);
+}
+
+ISR(TIMER1_OVF_vect) {
+    /* Timer1 stop clock */
+    TCCR1B &= ~(_BV(CS12) | _BV(CS11) | _BV(CS10));
+    /* Timer1 clear */
+    TCNT1 = 0x0000;
+    /* enable PCINT source 0 */
+    PCIFR |= _BV(PCIF0);
+    PCICR |= _BV(PCIE0);
 }
 
 #ifdef __clang__
