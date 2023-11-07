@@ -12,9 +12,6 @@ struct rtc_t rtc = {
     0b0000'0000
 };
 
-#define ceilof(big, small) \
-    (sizeof(big) + sizeof(small) - 1) / sizeof(small)
-
 int main(void) {
     fnd_init();
     ctl_init();
