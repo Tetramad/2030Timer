@@ -12,6 +12,9 @@ struct rtc_t rtc = {
     0b0000'0000
 };
 
+struct button_press_info_t pressed = { false, false };
+struct blink_info_t blink = { 0, 0 };
+
 int main(void) {
     fnd_init();
     ctl_init();
@@ -38,35 +41,8 @@ int main(void) {
         _delay_ms(100);
         display();
         if (cnt > 2) {
-            switch (mode) {
-                case Counter:
-                    break;
-                case YMD_Y:
-                    buf[1] = FND_OFF;
-                    buf[2] = FND_OFF;
-                    buf[3] = FND_OFF;
-                    buf[4] = FND_OFF;
-                    break;
-                case YMD_M:
-                    buf[5] = FND_OFF;
-                    buf[6] = FND_OFF;
-                    break;
-                case YMD_D:
-                    buf[7] = FND_OFF;
-                    buf[8] = FND_OFF;
-                    break;
-                case HMS_H:
-                    buf[1] = FND_OFF;
-                    buf[2] = FND_OFF;
-                    break;
-                case HMS_M:
-                    buf[4] = FND_OFF;
-                    buf[5] = FND_OFF;
-                    break;
-                case HMS_S:
-                    buf[7] = FND_OFF;
-                    buf[8] = FND_OFF;
-                    break;
+            for (uint8_t i = 0; i < blink.streak; ++i) {
+                buf[blink.start + i] = FND_OFF;
             }
         }
         ++cnt;
@@ -75,53 +51,67 @@ int main(void) {
         }
         fnd_display();
 
-        if (is_U_pressed) {
+        if (pressed.up) {
             if (up != nullptr) {
                 up();
                 cnt = 0;
                 display();
                 fnd_display();
             }
-            is_U_pressed = false;
+            pressed.up = false;
         }
 
-        if (is_N_pressed) {
+        if (pressed.next) {
             switch (mode) {
                 case Counter:
                     display = buffer_ymd;
                     up = up_year;
                     mode = YMD_Y;
+                    blink.start = 1;
+                    blink.streak = 4;
                     rtc_clock_disable();
                     break;
                 case YMD_Y:
                     up = up_month;
                     mode = YMD_M;
+                    blink.start = 5;
+                    blink.streak = 2;
                     break;
                 case YMD_M:
                     up = up_day;
                     mode = YMD_D;
+                    blink.start = 7;
+                    blink.streak = 2;
                     break;
                 case YMD_D:
                     display = buffer_hms;
                     up = up_hour;
                     mode = HMS_H;
+                    blink.start = 1;
+                    blink.streak = 2;
                     break;
                 case HMS_H:
                     up = up_minute;
                     mode = HMS_M;
+                    blink.start = 4;
+                    blink.streak = 2;
                     break;
                 case HMS_M:
                     up = up_second;
                     mode = HMS_S;
+                    blink.start = 7;
+                    blink.streak = 2;
                     break;
                 case HMS_S:
                     display = buffer_counter;
                     up = nullptr;
                     mode = Counter;
+                    blink.start = 0;
+                    blink.streak = 0;
                     rtc_clock_enable();
                     break;
             }
-            is_N_pressed = false;
+            pressed.next = false;
         }
     }
 }
@@ -413,10 +403,10 @@ time_t rtc_difftime(time_t lhs, time_t rhs) {
 
 ISR(PCINT0_vect) {
     if (bit_is_set(PINB, PINB6)) {
-        is_N_pressed = true;
+        pressed.next = true;
     }
     if (bit_is_set(PINB, PINB7)) {
-        is_U_pressed = true;
+        pressed.up = true;
     }
     /* Timer1 clear */
     TCNT1 = 0x0000;

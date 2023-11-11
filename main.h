@@ -49,8 +49,15 @@ void up_hour(void);
 void up_minute(void);
 void up_second(void);
 
-bool is_U_pressed = false;
-bool is_N_pressed = false;
+struct button_press_info_t {
+    bool next;
+    bool up;
+};
+
+struct blink_info_t {
+    uint8_t start;
+    uint8_t streak;
+};
 
 void ctl_init(void);
 
