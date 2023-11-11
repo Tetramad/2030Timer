@@ -37,43 +37,41 @@ int main(void) {
     for (;;) {
         _delay_ms(100);
         display();
-        if (display == buffer_ymd || display == buffer_hms) {
-            if (cnt > 2) {
-                switch (mode) {
-                    case Counter:
-                        break;
-                    case YMD_Y:
-                        buf[1] = FND_OFF;
-                        buf[2] = FND_OFF;
-                        buf[3] = FND_OFF;
-                        buf[4] = FND_OFF;
-                        break;
-                    case YMD_M:
-                        buf[5] = FND_OFF;
-                        buf[6] = FND_OFF;
-                        break;
-                    case YMD_D:
-                        buf[7] = FND_OFF;
-                        buf[8] = FND_OFF;
-                        break;
-                    case HMS_H:
-                        buf[1] = FND_OFF;
-                        buf[2] = FND_OFF;
-                        break;
-                    case HMS_M:
-                        buf[4] = FND_OFF;
-                        buf[5] = FND_OFF;
-                        break;
-                    case HMS_S:
-                        buf[7] = FND_OFF;
-                        buf[8] = FND_OFF;
-                        break;
-                }
+        if (cnt > 2) {
+            switch (mode) {
+                case Counter:
+                    break;
+                case YMD_Y:
+                    buf[1] = FND_OFF;
+                    buf[2] = FND_OFF;
+                    buf[3] = FND_OFF;
+                    buf[4] = FND_OFF;
+                    break;
+                case YMD_M:
+                    buf[5] = FND_OFF;
+                    buf[6] = FND_OFF;
+                    break;
+                case YMD_D:
+                    buf[7] = FND_OFF;
+                    buf[8] = FND_OFF;
+                    break;
+                case HMS_H:
+                    buf[1] = FND_OFF;
+                    buf[2] = FND_OFF;
+                    break;
+                case HMS_M:
+                    buf[4] = FND_OFF;
+                    buf[5] = FND_OFF;
+                    break;
+                case HMS_S:
+                    buf[7] = FND_OFF;
+                    buf[8] = FND_OFF;
+                    break;
             }
-            ++cnt;
-            if (cnt > 5) {
-                cnt = 0;
-            }
+        }
+        ++cnt;
+        if (cnt > 5) {
+            cnt = 0;
         }
         fnd_display();
 
