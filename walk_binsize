@@ -1,0 +1,11 @@
+#!/usr/bin/env zsh
+./clean > /dev/null 2> /dev/null
+for commit in `git rev-list master ^8de95ac`; do
+    git checkout -q $commit
+    git log --oneline -1
+    ./build > /dev/null 2> /dev/null
+    ./binsize
+done
+git checkout -q master
+git log --oneline -1
+./clean > /dev/null 2> /dev/null
