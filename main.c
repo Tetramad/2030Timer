@@ -33,13 +33,13 @@ int main(void) {
         HMS_S,
     } mode = Counter;
 
-    void (*display)(void) = buffer_counter;
+    void (*buffer)(void) = buffer_counter;
     void (*up)(void) = nullptr;
     uint8_t cnt = 0;
 
     for (;;) {
         _delay_ms(100);
-        display();
+        buffer();
         if (cnt > 2) {
             for (uint8_t i = 0; i < blink.streak; ++i) {
                 buf[blink.start + i] = FND_OFF;
@@ -55,7 +55,7 @@ int main(void) {
             if (up != nullptr) {
                 up();
                 cnt = 0;
-                display();
+                buffer();
                 fnd_display();
             }
             pressed.up = false;
@@ -64,7 +64,7 @@ int main(void) {
         if (pressed.next) {
             switch (mode) {
                 case Counter:
-                    display = buffer_ymd;
+                    buffer = buffer_ymd;
                     up = up_year;
                     mode = YMD_Y;
                     blink.start = 1;
@@ -84,7 +84,7 @@ int main(void) {
                     blink.streak = 2;
                     break;
                 case YMD_D:
-                    display = buffer_hms;
+                    buffer = buffer_hms;
                     up = up_hour;
                     mode = HMS_H;
                     blink.start = 1;
@@ -103,7 +103,7 @@ int main(void) {
                     blink.streak = 2;
                     break;
                 case HMS_S:
-                    display = buffer_counter;
+                    buffer = buffer_counter;
                     up = nullptr;
                     mode = Counter;
                     blink.start = 0;
