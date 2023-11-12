@@ -2,36 +2,57 @@
 #include "inline_utility.h"
 #include "inline_twi.h"
 
-struct rtc_t rtc = {
-    0b0000'0000,
-    0b0000'0000,
-    0b0000'0000,
-    0b0000'0001,
-    0b0000'0001,
-    0b1000'0001,
-    0b0000'0000
-};
-
-struct button_press_info_t pressed = { false, false };
-struct blink_info_t blink = { 0, 0 };
-
 int main(void) {
-    fnd_init();
-    ctl_init();
+    /*
+    ** Initializations
+    */
+
+    /* Cascaded shift registers for FNDs
+    ** PF0 --- SER
+    ** PF4 --- SRCLK
+    ** PF5 --- /SRCLR
+    ** PF6 --- RCLK
+    ** PF7 --- /RCLR
+    */
+    /* IO register configurations */
+    DDRF |= _BV(PORTF0) | _BV(PORTF4) | _BV(PORTF5) | _BV(PORTF6) | _BV(PORTF7);
+    PORTF &= ~(_BV(PORTF0) | _BV(PORTF4) | _BV(PORTF5) | _BV(PORTF6) | _BV(PORTF7));
+    /* Reset shift registers */
+    PORTF |= _BV(PORTF5) | _BV(PORTF7);
+
+    /* Buttons
+    ** PB6 --- Button.Next
+    ** PB7 --- Button.Up
+    ** PCINT based inputs with software debouncing
+    */
+    /* IO register configurations */
+    DDRB &= ~(_BV(PORTB6) | _BV(PORTB7));
+    PORTB &= ~(_BV(PORTB6) | _BV(PORTB7));
+    /* Timer1 stop clock */
+    TCCR1B &= ~(_BV(CS12) | _BV(CS11) | _BV(CS10));
+    /* Timer1 clear */
+    TCNT1 = 0x0000;
+    /* Timer1 enable overflow interrupt */
+    TIMSK1 |= _BV(TOIE1);
+    /* set mask for enabling pin change interrupt for PCINT7 and PCINT6 */
+    PCMSK0 |= _BV(PCINT7) | _BV(PCINT6);
+    /* enable PCINT source 0 */
+    PCICR = _BV(PCIE0);
+
+    /* RTC
+    ** communicate using I2C
+    */
     rtc_init();
+
+    /*
+    ** End of initializations
+    */
+
     sei();
 
     rtc_read_buffer();
 
-    enum {
-        Counter,
-        YMD_Y,
-        YMD_M,
-        YMD_D,
-        HMS_H,
-        HMS_M,
-        HMS_S,
-    } mode = Counter;
+    enum state_t mode = Counter;
 
     void (*buffer)(void) = buffer_counter;
     void (*up)(void) = nullptr;
@@ -39,7 +60,13 @@ int main(void) {
 
     for (;;) {
         _delay_ms(100);
+
+        /*
+        ** FND displaying phase
+        */
+        /* buffering matches to state */
         buffer();
+        /* check blinking timing */
         if (cnt > 2) {
             for (uint8_t i = 0; i < blink.streak; ++i) {
                 buf[blink.start + i] = FND_OFF;
@@ -49,7 +76,12 @@ int main(void) {
         if (cnt > 5) {
             cnt = 0;
         }
+        /* buffer out to FNDs */
         fnd_display();
+
+        /*
+        ** Button input handling phase
+        */
 
         if (pressed.up) {
             if (up != nullptr) {
@@ -116,15 +148,6 @@ int main(void) {
     }
 }
 
-void fnd_init(void) {
-    /* GPIO settings */
-    DDRF |= _BV(PORTF0) | _BV(PORTF4) | _BV(PORTF5) | _BV(PORTF6) | _BV(PORTF7);
-    PORTF &= ~(_BV(PORTF0) | _BV(PORTF4) | _BV(PORTF5) | _BV(PORTF6) | _BV(PORTF7));
-
-    /* Reset shift registers */
-    PORTF |= _BV(PORTF5) | _BV(PORTF7);
-}
-
 void fnd_display(void) {
     for (int i = 8; i >= 0; --i) {
         uint8_t n = FND_LUT[buf[i]];
@@ -141,127 +164,6 @@ void fnd_display(void) {
     }
     PORTF |= _BV(PORTF6);
     PORTF &= ~_BV(PORTF6);
-}
-
-void fnd_reset(void) {
-    PORTF |= _BV(PORTF0);
-    for (int i = 0; i < 9 * 8; ++i) {
-        PORTF |= _BV(PORTF4);
-        PORTF &= ~_BV(PORTF4);
-    }
-    PORTF |= _BV(PORTF6);
-    PORTF &= ~_BV(PORTF6);
-}
-
-void buffer_counter(void) {
-    rtc_read_buffer();
-    time_t remain_s = rtc_difftime(dday_s, rtc_mktime(&rtc));
-
-    for (int i = 8; i >= 0; --i) {
-        buf[i] = remain_s % 10;
-        remain_s /= 10;
-    }
-}
-
-void buffer_ymd(void) {
-    uint8_t date = 0;
-    uint8_t month = 0;
-    uint8_t year = 0;
-
-    rtc_read_ymd(&year, &month, &date);
-
-    buf[0] = FND_OFF;
-    buf[1] = 2;
-    buf[2] = 0;
-    buf[3] = year >> 4;
-    buf[4] = year & 0x0F;
-    buf[5] = month >> 4;
-    buf[6] = month & 0x0F;
-    buf[7] = date >> 4;
-    buf[8] = date & 0x0F;
-}
-
-void buffer_hms(void) {
-    uint8_t seconds = 0;
-    uint8_t minutes = 0;
-    uint8_t hours = 0;
-
-    rtc_read_hms(&hours, &minutes, &seconds);
-
-    buf[0] = FND_OFF;
-    buf[1] = hours >> 4;
-    buf[2] = hours & 0x0F;
-    buf[3] = FND_OFF;
-    buf[4] = minutes >> 4;
-    buf[5] = minutes & 0x0F;
-    buf[6] = FND_OFF;
-    buf[7] = seconds >> 4;
-    buf[8] = seconds & 0x0F;
-}
-
-void up_year(void) {
-    rtc_read_buffer();
-    rtc.year = bcd_incwa(rtc.year, 0x29, 0x00);
-    rtc_write_buffer();
-}
-
-void up_month(void) {
-    rtc_read_buffer();
-    rtc.month_century = bcd_incwa(rtc.month_century & 0b0001'1111, 0x12, 0x01) | 0b1000'0000;
-    rtc_write_buffer();
-}
-
-void up_day(void) {
-    uint8_t date = 0;
-    uint8_t month = 0;
-    uint8_t year = 0;
-    rtc_read_ymd(&year, &month, &date);
-    rtc.date = bcd_incwa(date, bcd_month_length(year, month), 0x01);
-    rtc_write_buffer();
-}
-
-void up_hour(void) {
-    rtc_read_buffer();
-    rtc.hours = bcd_incwa(rtc.hours, 0x23, 0x00);
-    rtc_write_buffer();
-}
-
-void up_minute(void) {
-    rtc_read_buffer();
-    rtc.minutes = bcd_incwa(rtc.minutes, 0x59, 0x00);
-    rtc_write_buffer();
-}
-
-void up_second(void) {
-    rtc_read_buffer();
-    rtc.seconds = bcd_incwa(rtc.seconds, 0x59, 0x00);
-    rtc_write_buffer();
-}
-
-void ctl_init(void) {
-    /* GPIO settings */
-    DDRB &= ~(_BV(PORTB6) | _BV(PORTB7));
-    PORTB &= ~(_BV(PORTB6) | _BV(PORTB7));
-
-    /* Timer1 stop clock */
-    TCCR1B &= ~(_BV(CS12) | _BV(CS11) | _BV(CS10));
-    /* Timer1 clear */
-    TCNT1 = 0x0000;
-
-    /* Timer1 enable overflow interrupt */
-    TIMSK1 |= _BV(TOIE1);
-
-    {
-        uint8_t sreg = SREG;
-        cli();
-
-        /* set mask for enabling pin change interrupt for PCINT7 and PCINT6 */
-        PCMSK0 |= _BV(PCINT7) | _BV(PCINT6);
-        /* enable PCINT source 0 */
-        PCICR = _BV(PCIE0);
-
-        SREG = sreg;
-    }
 }
 
 void rtc_init(void) {
@@ -299,20 +201,6 @@ void rtc_read_buffer(void) {
     twi_read_data(DS1337_SLA, 0x04, &rtc.date);
     twi_read_data(DS1337_SLA, 0x05, &rtc.month_century);
     twi_read_data(DS1337_SLA, 0x06, &rtc.year);
-}
-
-void rtc_read_ymd(uint8_t *y, uint8_t *m, uint8_t *d) {
-    rtc_read_buffer();
-    *y = rtc.year;
-    *m = rtc.month_century & 0b0001'1111;
-    *d = rtc.date;
-}
-
-void rtc_read_hms(uint8_t *h, uint8_t *m, uint8_t *s) {
-    rtc_read_buffer();
-    *h = rtc.hours;
-    *m = rtc.minutes;
-    *s = rtc.seconds;
 }
 
 time_t rtc_mktime(struct rtc_t const *rtc) {
@@ -394,6 +282,92 @@ time_t rtc_mktime(struct rtc_t const *rtc) {
 
 time_t rtc_difftime(time_t lhs, time_t rhs) {
     return lhs - rhs;
+}
+
+void buffer_counter(void) {
+    rtc_read_buffer();
+    time_t remain_s = rtc_difftime(DDAY_EPOCH, rtc_mktime(&rtc));
+
+    for (int i = 8; i >= 0; --i) {
+        buf[i] = remain_s % 10;
+        remain_s /= 10;
+    }
+}
+
+void buffer_ymd(void) {
+    rtc_read_buffer();
+
+    uint8_t date = rtc.date;
+    uint8_t month = rtc.month_century & 0b0001'1111;
+    uint8_t year = rtc.year;
+
+    buf[0] = FND_OFF;
+    buf[1] = 2;
+    buf[2] = 0;
+    buf[3] = year >> 4;
+    buf[4] = year & 0x0F;
+    buf[5] = month >> 4;
+    buf[6] = month & 0x0F;
+    buf[7] = date >> 4;
+    buf[8] = date & 0x0F;
+}
+
+void buffer_hms(void) {
+    rtc_read_buffer();
+
+    uint8_t seconds = rtc.seconds;
+    uint8_t minutes = rtc.minutes;
+    uint8_t hours = rtc.seconds;
+
+    buf[0] = FND_OFF;
+    buf[1] = hours >> 4;
+    buf[2] = hours & 0x0F;
+    buf[3] = FND_OFF;
+    buf[4] = minutes >> 4;
+    buf[5] = minutes & 0x0F;
+    buf[6] = FND_OFF;
+    buf[7] = seconds >> 4;
+    buf[8] = seconds & 0x0F;
+}
+
+void up_year(void) {
+    rtc_read_buffer();
+    rtc.year = bcd_incwa(rtc.year, 0x29, 0x00);
+    rtc_write_buffer();
+}
+
+void up_month(void) {
+    rtc_read_buffer();
+    rtc.month_century = bcd_incwa(rtc.month_century & 0b0001'1111, 0x12, 0x01) | 0b1000'0000;
+    rtc_write_buffer();
+}
+
+void up_day(void) {
+    rtc_read_buffer();
+
+    uint8_t date = rtc.date;
+    uint8_t month = rtc.month_century & 0b0001'1111;
+    uint8_t year = rtc.year;
+    rtc.date = bcd_incwa(date, bcd_month_length(year, month), 0x01);
+    rtc_write_buffer();
+}
+
+void up_hour(void) {
+    rtc_read_buffer();
+    rtc.hours = bcd_incwa(rtc.hours, 0x23, 0x00);
+    rtc_write_buffer();
+}
+
+void up_minute(void) {
+    rtc_read_buffer();
+    rtc.minutes = bcd_incwa(rtc.minutes, 0x59, 0x00);
+    rtc_write_buffer();
+}
+
+void up_second(void) {
+    rtc_read_buffer();
+    rtc.seconds = bcd_incwa(rtc.seconds, 0x59, 0x00);
+    rtc_write_buffer();
 }
 
 #ifdef __clang__
