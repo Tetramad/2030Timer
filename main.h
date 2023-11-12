@@ -31,6 +31,12 @@ struct blink_info_t {
     uint8_t streak;
 };
 
+struct state_info_t {
+    void (*buffer)(void);
+    void (*up)(void);
+    struct blink_info_t blink;
+};
+
 typedef uint32_t time_t;
 
 #ifdef __clang__
@@ -56,33 +62,6 @@ enum {
     FND_OFF = 10,
     FND_ON = 11
 };
-
-uint8_t buf[9] = { 0, };
-uint8_t const FND_LUT[] = {
-    [0]=0b11111100,
-    [1]=0b01100000,
-    [2]=0b11011010,
-    [3]=0b11110010,
-    [4]=0b01100110,
-    [5]=0b10110110,
-    [6]=0b10111110,
-    [7]=0b11100000,
-    [8]=0b11111110,
-    [9]=0b11110110,
-    [FND_OFF]=0b00000000,
-    [FND_ON]=0b11111111,
-};
-struct rtc_t rtc = {
-    0b0000'0000,
-    0b0000'0000,
-    0b0000'0000,
-    0b0000'0001,
-    0b0000'0001,
-    0b1000'0001,
-    0b0000'0000
-};
-struct button_press_info_t pressed = { false, false };
-struct blink_info_t blink = { 0, 0 };
 
 void fnd_display(void);
 void rtc_init(void);

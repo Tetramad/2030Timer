@@ -2,6 +2,69 @@
 #include "inline_utility.h"
 #include "inline_twi.h"
 
+static uint8_t buf[9] = { 0, };
+static uint8_t const FND_LUT[] = {
+    [0]=0b11111100,
+    [1]=0b01100000,
+    [2]=0b11011010,
+    [3]=0b11110010,
+    [4]=0b01100110,
+    [5]=0b10110110,
+    [6]=0b10111110,
+    [7]=0b11100000,
+    [8]=0b11111110,
+    [9]=0b11110110,
+    [FND_OFF]=0b00000000,
+    [FND_ON]=0b11111111,
+};
+static struct rtc_t rtc = {
+    0b0000'0000,
+    0b0000'0000,
+    0b0000'0000,
+    0b0000'0001,
+    0b0000'0001,
+    0b1000'0001,
+    0b0000'0000
+};
+static struct button_press_info_t pressed = { false, false };
+static const struct state_info_t state_info[7] = {
+    [Counter] = {
+        .buffer = buffer_counter,
+        .up = nullptr,
+        .blink = { .start = 0, .streak = 0 },
+    },
+    [YMD_Y] = {
+        .buffer = buffer_ymd,
+        .up = up_hour,
+        .blink = { .start = 1, .streak = 4 },
+    },
+    [YMD_M] = {
+        .buffer = buffer_ymd,
+        .up = up_month,
+        .blink = { .start = 5, .streak = 2 },
+    },
+    [YMD_D] = {
+        .buffer = buffer_ymd,
+        .up = up_day,
+        .blink = { .start = 7, .streak = 2 },
+    },
+    [HMS_H] = {
+        .buffer = buffer_hms,
+        .up = up_hour,
+        .blink = { .start = 1, .streak = 2 },
+    },
+    [HMS_M] = {
+        .buffer = buffer_hms,
+        .up = up_minute,
+        .blink = { .start = 4, .streak = 2 },
+    },
+    [HMS_S] = {
+        .buffer = buffer_hms,
+        .up = up_second,
+        .blink = { .start = 7, .streak = 2 },
+    },
+};
+
 int main(void) {
     /*
     ** Initializations
@@ -54,13 +117,14 @@ int main(void) {
 
     enum state_t mode = Counter;
 
-    void (*buffer)(void) = buffer_counter;
-    void (*up)(void) = nullptr;
     uint8_t cnt = 0;
 
     for (;;) {
         _delay_ms(100);
 
+        void (*const buffer)(void) = state_info[mode].buffer;
+        void (*const up)(void) = state_info[mode].up;
+        const struct blink_info_t blink = state_info[mode].blink;
         /*
         ** FND displaying phase
         */
@@ -94,55 +158,7 @@ int main(void) {
         }
 
         if (pressed.next) {
-            switch (mode) {
-                case Counter:
-                    buffer = buffer_ymd;
-                    up = up_year;
-                    mode = YMD_Y;
-                    blink.start = 1;
-                    blink.streak = 4;
-                    rtc_clock_disable();
-                    break;
-                case YMD_Y:
-                    up = up_month;
-                    mode = YMD_M;
-                    blink.start = 5;
-                    blink.streak = 2;
-                    break;
-                case YMD_M:
-                    up = up_day;
-                    mode = YMD_D;
-                    blink.start = 7;
-                    blink.streak = 2;
-                    break;
-                case YMD_D:
-                    buffer = buffer_hms;
-                    up = up_hour;
-                    mode = HMS_H;
-                    blink.start = 1;
-                    blink.streak = 2;
-                    break;
-                case HMS_H:
-                    up = up_minute;
-                    mode = HMS_M;
-                    blink.start = 4;
-                    blink.streak = 2;
-                    break;
-                case HMS_M:
-                    up = up_second;
-                    mode = HMS_S;
-                    blink.start = 7;
-                    blink.streak = 2;
-                    break;
-                case HMS_S:
-                    buffer = buffer_counter;
-                    up = nullptr;
-                    mode = Counter;
-                    blink.start = 0;
-                    blink.streak = 0;
-                    rtc_clock_enable();
-                    break;
-            }
+            mode = mode + 1 > HMS_S ? Counter : mode + 1;
             pressed.next = false;
         }
     }
