@@ -35,7 +35,7 @@ static const struct state_info_t state_info[7] = {
     },
     [YMD_Y] = {
         .buffer = buffer_ymd,
-        .up = up_hour,
+        .up = up_year,
         .blink = { .start = 1, .streak = 4 },
     },
     [YMD_M] = {
@@ -335,7 +335,7 @@ void buffer_hms(void) {
 
     uint8_t seconds = rtc.seconds;
     uint8_t minutes = rtc.minutes;
-    uint8_t hours = rtc.seconds;
+    uint8_t hours = rtc.hours;
 
     buf[0] = FND_OFF;
     buf[1] = hours >> 4;
