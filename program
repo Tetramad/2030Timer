@@ -1,2 +1,0 @@
-#!/usr/bin/zsh -vf
-avrdude -p m32u4 -c avrispmkII -U flash:w:a.out:e

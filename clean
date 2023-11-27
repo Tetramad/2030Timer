@@ -1,2 +1,0 @@
-#!/usr/bin/zsh -vf
-rm -f -- main.o a.out a.bin

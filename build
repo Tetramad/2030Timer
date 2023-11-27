@@ -1,2 +1,0 @@
-#!/usr/bin/zsh -vf
-avr-gcc -std=c2x -Wall -Wextra -Wpedantic -Werror -Wno-array-bounds -Wno-gnu-binary-literal -mmcu=atmega32u4 -O2 -DF_CPU=16000000UL main.c

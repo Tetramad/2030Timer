@@ -1,8 +1,0 @@
-#!/usr/bin/env zsh
-
-if test -z $1; then
-    1="a.out"
-fi
-
-avr-objcopy -O binary $1 a.bin \
-&& stat --format="%s" a.bin
