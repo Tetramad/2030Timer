@@ -72,8 +72,8 @@ int main(void) {
 
     /* Cascaded shift registers for FNDs
     ** PF0 --- SER
-    ** PF4 --- SRCLK
-    ** PF5 --- /SRCLR
+    ** PF4 --- /SRCLR
+    ** PF5 --- SRCLK
     ** PF6 --- RCLK
     ** PF7 --- /RCLR
     */
@@ -81,11 +81,13 @@ int main(void) {
     DDRF |= _BV(PORTF0) | _BV(PORTF4) | _BV(PORTF5) | _BV(PORTF6) | _BV(PORTF7);
     PORTF &= ~(_BV(PORTF0) | _BV(PORTF4) | _BV(PORTF5) | _BV(PORTF6) | _BV(PORTF7));
     /* Reset shift registers */
-    PORTF |= _BV(PORTF5) | _BV(PORTF7);
+    PORTF |= _BV(PORTF4) | _BV(PORTF7);
 
     /* Buttons
     ** PB6 --- Button.Next
     ** PB7 --- Button.Up
+    ** PB6 --- Button.Up
+    ** PB7 --- Button.Next
     ** PCINT based inputs with software debouncing
     */
     /* IO register configurations */
@@ -173,8 +175,8 @@ void fnd_display(void) {
             } else {
                 PORTF |= _BV(PORTF0);
             }
-            PORTF |= _BV(PORTF4);
-            PORTF &= ~_BV(PORTF4);
+            PORTF |= _BV(PORTF5);
+            PORTF &= ~_BV(PORTF5);
             n >>= 1;
         }
     }
@@ -392,10 +394,10 @@ void up_second(void) {
 #endif
 
 ISR(PCINT0_vect) {
-    if (bit_is_set(PINB, PINB6)) {
+    if (bit_is_set(PINB, PINB7)) {
         pressed.next = true;
     }
-    if (bit_is_set(PINB, PINB7)) {
+    if (bit_is_set(PINB, PINB6)) {
         pressed.up = true;
     }
     /* Timer1 clear */
