@@ -2,24 +2,32 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <util/twi.h>
+#include <util/delay.h>
+
+volatile uint8_t twi_slarw = 0x00;
+#define TWI_BUFFER_SIZE 2
+volatile uint8_t twi_buffer[TWI_BUFFER_SIZE] = { 0, };
+volatile uint8_t twi_index = 0;
 
 enum {
-    TWIC_STO,
-    TWIC_WRITE_SLA,
-    TWIC_WRITE_LOC,
-    TWIC_WRITE_DATA,
-    TWIC_READ_SLA,
-    TWIC_READ_SELECT,
-    TWIC_READ_REP,
-    TWIC_READ_REP_SLA,
-    TWIC_READ_READY,
-    TWIC_READ_DATA,
-} volatile twic = TWIC_STO;
+    TWI_READY,
+    TWI_ADDRESSED_WRITE,
+    TWI_ADDRESSED_READ,
+};
+typedef uint8_t twi_state_t;
 
-volatile uint8_t twic_sla = 0x00;
-volatile uint8_t twic_loc = 0x00;
-volatile uint8_t twic_data = 0x00;
-uint8_t * volatile twic_receive = nullptr;
+volatile twi_state_t twi_state = TWI_READY;
+
+#define T_SU_STO 4.0 /* us */
+#define T_BUF 4.7 /* us */
+#define STOP_DELAY do { _delay_us(T_SU_STO + T_BUF + 1.0); } while (false)
+
+#define TX_START do { TWCR = _BV(TWINT) | _BV(TWSTA) | _BV(TWEN) | _BV(TWIE); } while (false)
+#define TX_STOP do { TWCR = _BV(TWINT) | _BV(TWSTO) | _BV(TWEN) | _BV(TWIE); STOP_DELAY; twi_state = TWI_READY; } while (false)
+#define TX_WITH_ACK do { TWCR = TWCR = _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE); } while (false)
+#define TX_WITH_NACK do { TWCR = TWCR = _BV(TWINT) | _BV(TWEN) | _BV(TWIE); } while (false)
+#define TX_WITH_XACK TX_WITH_NACK
+#define WAIT_TWI_READY do { while (twi_state != TWI_READY) {} } while (false)
 
 static inline void twi_enable(void) {
     TWCR = _BV(TWEN) | _BV(TWIE);
@@ -35,21 +43,24 @@ static inline void twi_prescaler(uint8_t prescaler) {
 }
 
 static inline void twi_write_data(uint8_t sla, uint8_t loc, uint8_t data) {
-    while (twic != TWIC_STO) {}
-    twic_sla = sla;
-    twic_loc = loc;
-    twic_data = data;
-    twic = TWIC_WRITE_SLA;
-    TWCR = _BV(TWINT) | _BV(TWSTA) | _BV(TWEN) | _BV(TWIE);
+    WAIT_TWI_READY;
+    twi_state = TWI_ADDRESSED_WRITE;
+    twi_slarw = (sla << 1) | TW_WRITE;
+    twi_index = 0;
+    twi_buffer[0] = loc;
+    twi_buffer[1] = data;
+    TX_START;
 }
 
 static inline void twi_read_data(uint8_t sla, uint8_t loc, uint8_t *receive) {
-    while (twic != TWIC_STO) {}
-    twic_sla = sla;
-    twic_loc = loc;
-    twic_receive = receive;
-    twic = TWIC_READ_SLA;
-    TWCR = _BV(TWINT) | _BV(TWSTA) | _BV(TWEN) | _BV(TWIE);
+    WAIT_TWI_READY;
+    twi_state = TWI_ADDRESSED_READ;
+    twi_slarw = (sla << 1) | TW_WRITE;
+    twi_index = 0;
+    twi_buffer[0] = loc;
+    TX_START;
+    WAIT_TWI_READY;
+    *receive = twi_buffer[1];
 }
 
 #ifdef __clang__
@@ -58,91 +69,46 @@ static inline void twi_read_data(uint8_t sla, uint8_t loc, uint8_t *receive) {
 #endif
 
 ISR(TWI_vect) {
-    switch (twic) {
-        case TWIC_WRITE_SLA:
-            if (TW_STATUS == TW_START) {
-                TWDR = (twic_sla << 1) | TW_WRITE;
-                twic = TWIC_WRITE_LOC;
-                TWCR = _BV(TWINT) | _BV(TWEN) | _BV(TWIE);
-                return;
+    switch (TW_STATUS) {
+        case TW_START:
+        case TW_REP_START:
+            TWDR = twi_slarw;
+            TX_WITH_XACK;
+            break;
+        case TW_MT_SLA_ACK:
+            TWDR = twi_buffer[twi_index];
+            ++twi_index;
+            TX_WITH_XACK;
+            break;
+        case TW_MT_DATA_ACK:
+            if (twi_state == TWI_ADDRESSED_READ) {
+                twi_slarw = twi_slarw | TW_READ;
+                TX_START;
             } else {
-                break;
+                if (twi_index < TWI_BUFFER_SIZE) {
+                    TWDR = twi_buffer[twi_index];
+                    ++twi_index;
+                    TX_WITH_XACK;
+                } else {
+                    TX_STOP;
+                }
             }
-        case TWIC_WRITE_LOC:
-            if (TW_STATUS == TW_MT_SLA_ACK) {
-                TWDR = twic_loc;
-                twic = TWIC_WRITE_DATA;
-                TWCR = _BV(TWINT) | _BV(TWEN) | _BV(TWIE);
-                return;
-            } else {
-                break;
-            }
-        case TWIC_WRITE_DATA:
-            if (TW_STATUS == TW_MT_DATA_ACK) {
-                TWDR = twic_data;
-                twic = TWIC_STO;
-                TWCR = _BV(TWINT) | _BV(TWEN) | _BV(TWIE);
-                return;
-            } else {
-                break;
-            }
-        case TWIC_READ_SLA:
-            if (TW_STATUS == TW_START) {
-                TWDR = (twic_sla << 1) | TW_WRITE;
-                twic = TWIC_READ_SELECT;
-                TWCR = _BV(TWINT) | _BV(TWEN) | _BV(TWIE);
-                return;
-            } else {
-                break;
-            }
-        case TWIC_READ_SELECT:
-            if (TW_STATUS == TW_MT_SLA_ACK) {
-                TWDR = twic_loc;
-                twic = TWIC_READ_REP;
-                TWCR = _BV(TWINT) | _BV(TWEN) | _BV(TWIE);
-                return;
-            } {
-                break;
-            }
-        case TWIC_READ_REP:
-            if (TW_STATUS == TW_MT_DATA_ACK) {
-                twic = TWIC_READ_REP_SLA;
-                TWCR = _BV(TWINT) | _BV(TWSTA) | _BV(TWEN) | _BV(TWIE);
-                return;
-            } else {
-                break;
-            }
-        case TWIC_READ_REP_SLA:
-            if (TW_STATUS == TW_REP_START) {
-                TWDR = (twic_sla << 1) | TW_READ;
-                twic = TWIC_READ_READY;
-                TWCR = _BV(TWINT) | _BV(TWEN) | _BV(TWIE);
-                return;
-            } else {
-                break;
-            }
-        case TWIC_READ_READY:
-            if (TW_STATUS == TW_MR_SLA_ACK) {
-                twic = TWIC_READ_DATA;
-                TWCR = _BV(TWINT) | _BV(TWEN) | _BV(TWIE);
-                return;
-            } else {
-                break;
-            }
-        case TWIC_READ_DATA:
-            if (TW_STATUS == TW_MR_DATA_NACK) {
-                *twic_receive = TWDR;
-                twic = TWIC_STO;
-                TWCR = _BV(TWINT) | _BV(TWSTO) | _BV(TWEN) | _BV(TWIE);
-                return;
-            } else {
-                break;
-            }
-        case TWIC_STO:
+            break;
+        case TW_MR_SLA_ACK:
+        case TW_MR_DATA_ACK:
+            TX_WITH_NACK;
+            break;
+        case TW_MR_DATA_NACK:
+            twi_buffer[1] = TWDR;
+            TX_STOP;
+            break;
+        case TW_MT_SLA_NACK:
+        case TW_MT_DATA_NACK:
+        case TW_MR_SLA_NACK:
+        default:
+            TX_STOP;
             break;
     }
-    twic = TWIC_STO;
-    TWCR = _BV(TWINT) | _BV(TWSTO) | _BV(TWEN) | _BV(TWIE);
 }
 
 #ifdef __clang__
