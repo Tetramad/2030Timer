@@ -17,7 +17,7 @@ static uint8_t const FND_LUT[] = {
     [FND_OFF]=0b00000000,
     [FND_ON]=0b11111111,
 };
-static struct rtc_t rtc = {
+static rtc_t rtc = {
     0b0000'0000,
     0b0000'0000,
     0b0000'0000,
@@ -26,8 +26,8 @@ static struct rtc_t rtc = {
     0b1000'0001,
     0b0000'0000
 };
-static struct button_press_info_t pressed = { false, false };
-static const struct state_info_t state_info[7] = {
+static button_press_info_t pressed = { false, false };
+static const state_info_t state_info[7] = {
     [Counter] = {
         .buffer = buffer_counter,
         .up = nullptr,
@@ -104,10 +104,17 @@ int main(void) {
     /* enable PCINT source 0 */
     PCICR = _BV(PCIE0);
 
-    /* RTC
-    ** communicate using I2C
+    /* TWI configurations
+    ** SCL frequency = CPU Clock frequency / (16 + 2 * TWBR * pow(4, TWPS))
+    ** TWBR should be 10 or higher if the TWI operates in Master mode.
+    **
+    ** TWBR = 96 and TWPS = 0
+    ** SCL frequency to 50kHz
     */
-    rtc_init();
+    TWBR = 152;
+    /* TWPS default to 0b00 */
+    /* Enable TWI interface */
+    TWCR = _BV(TWEN) | _BV(TWIE);
 
     /*
     ** End of initializations
@@ -117,8 +124,7 @@ int main(void) {
 
     rtc_read_buffer();
 
-    enum state_t mode = Counter;
-
+    state_t mode = Counter;
     uint8_t cnt = 0;
 
     for (;;) {
@@ -126,7 +132,7 @@ int main(void) {
 
         void (*const buffer)(void) = state_info[mode].buffer;
         void (*const up)(void) = state_info[mode].up;
-        const struct blink_info_t blink = state_info[mode].blink;
+        const blink_info_t blink = state_info[mode].blink;
         /*
         ** FND displaying phase
         */
@@ -184,23 +190,6 @@ void fnd_display(void) {
     PORTF &= ~_BV(PORTF6);
 }
 
-void rtc_init(void) {
-    /* Set Bit Rate Generator Unit
-    ** SCL frequency to about 76.923kHz */
-    twi_bitrate(0b0110'0000);
-    twi_prescaler(0x00);
-    /* Enable TWI interface */
-    twi_enable();
-}
-
-void rtc_clock_enable(void) {
-    twi_write_data(DS1337_SLA, 0x0E, 0b0000'0000);
-}
-
-void rtc_clock_disable(void) {
-    twi_write_data(DS1337_SLA, 0x0E, 0b1000'0000);
-}
-
 void rtc_write_buffer(void) {
     twi_write_data(DS1337_SLA, 0x00, rtc.seconds);
     twi_write_data(DS1337_SLA, 0x01, rtc.minutes);
@@ -221,10 +210,10 @@ void rtc_read_buffer(void) {
     twi_read_data(DS1337_SLA, 0x06, &rtc.year);
 }
 
-time_t rtc_mktime(struct rtc_t const *rtc) {
+time_t rtc_mktime(rtc_t const *rtc) {
     time_t t = 0;
 
-    uint16_t year = (rtc->year >> 4) * 10 + (rtc->year & 0x0F);
+    uint16_t year = bcdtouint8(rtc->year);
     t += (365 * 4 + 1) * (year >> 2);
     switch (year & 0b11) {
         case 0b11:
@@ -280,18 +269,18 @@ time_t rtc_mktime(struct rtc_t const *rtc) {
             break;
     }
 
-    uint8_t date = (rtc->date >> 4) * 10 + (rtc->date & 0x0F);
+    uint8_t date = bcdtouint8(rtc->date);
     t += date - 1;
 
-    uint8_t hours = (rtc->hours >> 4) * 10 + (rtc->hours & 0x0F);
+    uint8_t hours = bcdtouint8(rtc->hours);
     t *= 24;
     t += hours;
 
-    uint8_t minutes = (rtc->minutes >> 4) * 10 + (rtc->minutes & 0x0F);
+    uint8_t minutes = bcdtouint8(rtc->minutes);
     t *= 60;
     t += minutes;
 
-    uint8_t seconds = (rtc->seconds >> 4) * 10 + (rtc->seconds & 0x0F);
+    uint8_t seconds = bcdtouint8(rtc->seconds);
     t *= 60;
     t += seconds;
 
@@ -388,11 +377,6 @@ void up_second(void) {
     rtc_write_buffer();
 }
 
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
-#endif
-
 ISR(PCINT0_vect) {
     if (bit_is_set(PINB, PINB7)) {
         pressed.next = true;
@@ -419,6 +403,3 @@ ISR(TIMER1_OVF_vect) {
     PCICR |= _BV(PCIE0);
 }
 
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif

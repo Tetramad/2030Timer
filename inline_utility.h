@@ -1,76 +1,11 @@
 #include <stdint.h>
 
-static inline void u8rprinti16(uint8_t buf[], int begin, int end, int16_t val) {
-    bool const inc = begin <= end;
-
-    for (int i = begin; (inc ? i <= end : i >= end); (inc ? ++i : --i)) {
-        buf[i] = val % 10;
-        val /= 10;
-    }
+static inline uint8_t bcdtouint8(uint8_t bcd) {
+    return (bcd >> 4) * 10 + (bcd & 0b0000'1111);
 }
 
-static inline void u8rprinti8(uint8_t buf[], int begin, int end, int8_t val) {
-    bool const inc = begin <= end;
-
-    for (int i = begin; (inc ? i <= end : i >= end); (inc ? ++i : --i)) {
-        buf[i] = val % 10;
-        val /= 10;
-    }
-}
-
-static inline void u8rprintu8(uint8_t buf[], int begin, int end, uint8_t val) {
-    bool const inc = begin <= end;
-
-    for (int i = begin; (inc ? i <= end : i >= end); (inc ? ++i : --i)) {
-        buf[i] = val % 10;
-        val /= 10;
-    }
-}
-
-#define u8rprint(buf, begin, end, val) \
-    _Generic((val), int16_t: u8rprinti16, int8_t: u8rprinti8, uint8_t: u8rprintu8)(buf, begin, end, val)
-
-static inline void incwai16(int16_t *pval, int16_t max, int16_t reset) {
-    int16_t val = *pval;
-
-    ++val;
-    if (val > max) {
-        val = reset;
-    }
-    *pval = val;
-}
-
-static inline void incwai8(int8_t *pval, int8_t max, int8_t reset) {
-    int8_t val = *pval;
-
-    ++val;
-    if (val > max) {
-        val = reset;
-    }
-    *pval = val;
-}
-
-#define incwa(pval, max, reset) \
-    _Generic((*pval), int16_t: incwai16, int8_t: incwai8)(pval, max, reset)
-
-static inline uint8_t bcd2u8(uint8_t bcd) {
-    return ((bcd >> 4) * 10) + (bcd & 0b0000'1111);
-}
-
-static inline uint8_t u82bcd(uint8_t u8) {
-    return ((u8 / 10) << 4) | (u8 % 10);
-}
-
-static inline uint8_t bcd_inc(uint8_t val) {
-    val += 1;
-    if ((val & 0x0F) >= 0x0A) {
-        val -= 0x0A;
-        val += 0x10;
-    }
-    if ((val & 0xF0) >= 0xA0) {
-        val -= 0xA0;
-    }
-    return val;
+static inline uint8_t uint8tobcd(uint8_t uint8) {
+    return (uint8 / 10) << 4 | (uint8 % 10);
 }
 
 static inline uint8_t bcd_incwa(uint8_t val, uint8_t max, uint8_t reset) {

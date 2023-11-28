@@ -11,7 +11,7 @@
 #define YEAR_OFFSET 2000
 #define DS1337_SLA 0b1101000
 
-struct rtc_t {
+typedef struct {
     uint8_t seconds;
     uint8_t minutes;
     uint8_t hours;
@@ -19,32 +19,27 @@ struct rtc_t {
     uint8_t date;
     uint8_t month_century;
     uint8_t year;
-};
+} rtc_t;
 
-struct button_press_info_t {
+typedef struct {
     bool next;
     bool up;
-};
+} button_press_info_t;
 
-struct blink_info_t {
+typedef struct {
     uint8_t start;
     uint8_t streak;
-};
+} blink_info_t;
 
-struct state_info_t {
+typedef struct {
     void (*buffer)(void);
     void (*up)(void);
-    struct blink_info_t blink;
-};
+    blink_info_t blink;
+} state_info_t;
 
 typedef uint32_t time_t;
 
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wfixed-enum-extension"
-#endif
-
-enum state_t : uint8_t {
+enum {
     Counter,
     YMD_Y,
     YMD_M,
@@ -53,10 +48,7 @@ enum state_t : uint8_t {
     HMS_M,
     HMS_S,
 };
-
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
+typedef uint8_t state_t;
 
 enum {
     FND_OFF = 10,
@@ -69,7 +61,7 @@ void rtc_clock_enable(void);
 void rtc_clock_disable(void);
 void rtc_write_buffer(void);
 void rtc_read_buffer(void);
-time_t rtc_mktime(struct rtc_t const *rtc);
+time_t rtc_mktime(rtc_t const *rtc);
 time_t rtc_difftime(time_t lhs, time_t rhs);
 void buffer_counter(void);
 void buffer_ymd(void);

@@ -1,6 +1,6 @@
 SHELL := bash
 CC := avr-gcc
-CFLAGS += -std=c2x -Wall -Wextra -Wpedantic -Wno-array-bounds -Wno-gnu-binary-literal -O2 -DF_CPU=16000000UL
+CFLAGS += -std=c2x -Wall -Wextra -Wpedantic -Wno-array-bounds -Wno-gnu-binary-literal -Wno-gnu-zero-variadic-macro-arguments -O2 -DF_CPU=16000000UL
 MCU := atmega32u4
 PARTNO := m32u4
 PROGRAMMER := avrispmkII
