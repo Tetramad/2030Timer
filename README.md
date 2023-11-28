@@ -4,7 +4,7 @@ Timer displayed in seconds with time remaining until 2030.
 
 # Block Diagram
 
-![Block Diagram](/doc/Block%20Diagram.jpg)
+![Block Diagram](/doc/Block%20Diagram.webp)
 
 # Implementation
 
