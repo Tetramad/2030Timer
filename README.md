@@ -6,6 +6,10 @@ Timer displayed in seconds with time remaining until 2030.
 
 ![Block Diagram](/doc/Block%20Diagram.webp)
 
+# Perfboard
+
+![Perfboard](/doc/Perfboard.jpg)
+
 # Implementation
 
 - [X] Displaying seconds until 2030 to FND
