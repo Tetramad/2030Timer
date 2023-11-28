@@ -84,8 +84,6 @@ int main(void) {
     PORTF |= _BV(PORTF4) | _BV(PORTF7);
 
     /* Buttons
-    ** PB6 --- Button.Next
-    ** PB7 --- Button.Up
     ** PB6 --- Button.Up
     ** PB7 --- Button.Next
     ** PCINT based inputs with software debouncing
