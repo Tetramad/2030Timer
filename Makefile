@@ -37,7 +37,7 @@ compile: main.o
 clean:
 	rm -f -- *.out *.bin *.o
 
-main.o: main.c main.h inline_utility.h inline_twi.h
+main.o: main.c main.h bcd.h twi.h
 	$(CC) $(CFLAGS) -mmcu=$(MCU) -c $<
 
 a.out: main.o

@@ -1,6 +1,6 @@
 #include "main.h"
-#include "inline_utility.h"
-#include "inline_twi.h"
+#include "bcd.h"
+#include "twi.h"
 
 static uint8_t buf[9] = { 0, };
 static uint8_t const FND_LUT[] = {
